@@ -12,4 +12,4 @@ Teacher: Dra. Rocío Alejandra Aldeco Pérez · Delivery date: 26/09/2026
 
 ---
 ## 1. System Overview
-**Define the problem to solve**
+**The problem:** Two people who do not share a trusted network need to exchange a file. The file travels through, and may sit in, places neither of them controls: a network path, a shared folder, a remote storage service. 

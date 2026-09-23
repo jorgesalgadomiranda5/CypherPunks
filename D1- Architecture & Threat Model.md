@@ -46,3 +46,40 @@ The diagram follows the package from left to right. On Alice's side, the vault p
 The Secure Package then crosses into the untrusted zone, where we assume the attacker can act on it.
 On Bob's side, the package arrives and is treated as an untrusted input, once the vault checks freshness and verifies the signature against Alice's public key from the Address Book, it recovers the key and decrypt with Bob's private key. 
 Only then is the file released to Bob. 
+
+
+### How the required elements map to this platform
+
+| Required element | In this platform | Trust | What the design assumes by trusting or distrusting it |
+| --- | --- | --- | --- |
+| User | Alice (sender), Bob (recipient) | Trusted | They act in good faith with their files and keep their secret and their devices are not compromised. |
+| Application (Vault) | Sender side: file selection, encryption, signing.<br> Recipient side: freshness check, signature verification, key recovery, decryption. | Trusted | It runs as designed and has not been modified. It is the only place where plaintext and clear keys exist. |
+| Encrypted File Container | The Secure Package | Untrusted | Anyone can read, copy, alter or replace it outside a trusted environment, so it must protect itself. It stays untrusted on arrival until every check passes. |
+| Key Store | One per user, inside their trusted environment | Trusted | It keeps private keys protected at rest and gives them to the Vault only after the user unlocks it. |
+| Public Keys / Recipients | The Secure Address Book | Trusted | Its entries are authentic and cannot be changed by untrusted parties. |
+| transit channel | The transit channel and any place where a package rests | Untrusted | Nothing depends on it. No confidentiality, integrity, ordering or delivery is expected from it. |
+| Attacker | Acts on the untrusted zone | Untrusted | Assumed to have malicious intent and the capabilities. |
+
+
+### Trust boundaries
+
+| ID | Boundary | Why it matters |
+| --- | --- | --- |
+| TB1 | | |
+| TB2 | | |
+| TB3 | | |
+| TB4 | | |
+
+### Data flows
+
+| ID | Flow | Carries | Boundary |
+| F1 |  |  |  |
+| F2 |  |  |  |
+| F3 |  |  |  |
+| F4 |  |  |  |
+| F5 |  |  |  |
+| F6 |  |  |  |
+| F7 |  |  |  |
+| F8 |  |  |  |
+| F9 |  |  |  |
+| F10 |  |  |  |

@@ -73,7 +73,7 @@ Only then is the file released to Bob.
 ### Data flows
 
 | ID | Flow | Carries | Boundary |
-| --- | --- | --- |
+| --- | --- | --- | --- |
 | F1 |  |  |  |
 | F2 |  |  |  |
 | F3 |  |  |  |

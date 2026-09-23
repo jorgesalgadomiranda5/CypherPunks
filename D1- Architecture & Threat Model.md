@@ -39,7 +39,7 @@ The platform (the Vault, from here on) exists to make that not matter: Bob shoul
 - *Key lifecycle.* Revocation, rotation, recovery, and how public keys get enrolled in the first place along with what happens to old packages if a long-term key is later exposed are left as open questions.
 
 --- 
-##2. Architecture Diagram
+## 2. Architecture Diagram
 ![Architecture diagram showing explicitly trusted and untrusted components, trust boundaries and data flows](architecture_diagram.png)
 
 The diagram follows the package from left to right. On Alice's side, the vault picks up the chosen file, looks up for Bob's public key, encrypts the content and signs the whole thing using the private key stored in the Key Store.

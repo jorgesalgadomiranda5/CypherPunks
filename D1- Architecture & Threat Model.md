@@ -42,9 +42,9 @@ The platform (the Vault, from here on) exists to make that not matter: Bob shoul
 ## 2. Architecture Diagram
 ![Architecture diagram showing explicitly trusted and untrusted components, trust boundaries and data flows](architecture_diagram.png)
 
-The diagram follows the package from left to right. On Alice's side, the vault picks up the chosen file, looks up for Bob's public key, encrypts the content and signs the whole thing using the private key stored in the Key Store.
+The diagram follows the package from left to right. On Alice's side, the vault picks up the chosen file, looks up for Bob's public key, encrypts the content (**E**) and signs the package (**S**) using the private key stored in the Key Store.
 The Secure Package then crosses into the untrusted zone, where we assume the attacker can act on it.
-On Bob's side, the package arrives and is treated as an untrusted input, once the vault checks freshness and verifies the signature against Alice's public key from the Address Book, it recovers the key and decrypt with Bob's private key. 
+On Bob's side, the package arrives and is treated as an untrusted input, once the vault checks freshness and verifies the signature (**V**) against Alice's public key from the Address Book, it recovers the key and decrypts (**D**) with Bob's private key. 
 Only then is the file released to Bob. 
 
 

@@ -65,16 +65,16 @@ Only then is the file released to Bob.
 
 | ID | Boundary | Why it matters |
 | --- | --- | --- |
-| TB1 | | |
-| TB2 | | |
-| TB3 | | |
-| TB4 | | |
+| TB1 | Alice's trusted environment → untrusted zone | Once the package crosses, the attacker can read, copy, modify, delete or replay it. |
+| TB2 | Untrusted zone → Bob's trusted environment | |
+| TB3 | User ↔ Vault | |
+| TB4 | Vault ↔ Key Store and Address Book | |
 
 ### Data flows
 
 | ID | Flow | Carries | Boundary |
 | --- | --- | --- | --- |
-| F1 |  |  |  |
+| F1 | Alice → Vault (sender) | The chosen file | TB3 |
 | F2 |  |  |  |
 | F3 |  |  |  |
 | F4 |  |  |  |
@@ -93,22 +93,22 @@ The threat model defines the assets that need protection and the capabilities of
 
 The following assets were identified as relevant to the security of the platform:
 
-| Asset | Why it must be protected |
-| --- | --- |
-| File contents | The original information sent by Alice must remain confidential and must not be modified during transmission. |
-| Metadata | Information associated with the Secure Package must not be modified without detection. |
-| Private keys | Private keys must remain protected inside the trusted environment and must not be available to attackers. |
-| Protected file key | The key used to protect the file must only be recoverable by the intended recipient. |
-| User credentials | Credentials used to access the system must not be obtained by an attacker and used to impersonate a legitimate user. |
-| Sender information | Bob must be able to determine whether the package actually originated from Alice. |
-| Recipient information | An attacker must not be able to replace or modify the intended recipient without detection. |
-| Digital signatures | The signature must remain valid for the original package and must allow the recipient to verify its origin and integrity. |
-| Secure Address Book | The mapping between identities and public keys must remain trustworthy. |
-| Transmission package | The package may be copied, modified, replayed or deleted while passing through the untrusted transmission channel. |
+| Asset | Why it must be protected | What must hold |
+| --- | --- | --- |
+| File contents | The original information sent by Alice must remain confidential and must not be modified during transmission. | Confidentiality and integrity |
+| Metadata | Information associated with the Secure Package must not be modified without detection. | Confidentiality and integrity |
+| Private keys | Private keys must remain protected inside the trusted environment and must not be available to attackers. | Confidentiality |
+| Protected file key | The key used to protect the file must only be recoverable by the intended recipient. | Confidentiality |
+| User credentials | Credentials used to access the system must not be obtained by an attacker and used to impersonate a legitimate user. | Confidentiality |
+| Sender information | Bob must be able to determine whether the package actually originated from Alice. | Authenticity |
+| Recipient information | An attacker must not be able to replace or modify the intended recipient without detection. | Integrity and authenticity |
+| Digital signatures | The signature must remain valid for the original package and must allow the recipient to verify its origin and integrity. | Confidentiality |
+| Secure Address Book | The mapping between identities and public keys must remain trustworthy. | Authenticity and integrity |
+| Transmission package | The package may be copied, modified, replayed or deleted while passing through the untrusted transmission channel. | Confidentiality and integrity |
 
 ## 4.2 Adversaries
 
-The main adversary considered by the system is an attacker who can operate in the untrusted environment, especially the transmission channel between Alice and Bob.
+The main adversary considered by the system is an attacker that is assumed to know exactly how the platformn works and can operate in the untrusted environment, especially the transmission channel between Alice and Bob.
 
 The attacker may act actively by modifying or replacing information, or  by observing and copying information traveling through the channel.
 
@@ -137,7 +137,7 @@ Under the assumptions of this architecture, the attacker cannot:
 - Legitimately prove Alice's identity without the cryptographic material associated with Alice.
 - Modify authenticated file contents or metadata without the receiving system being expected to detect the modification.
 - Control the Secure Address Book, since it is considered a trusted component.
-- Directly compromise the encryption, signing, verification and decryption processes, because these processes are assumed to operate inside the trusted environment.
+- Directly compromise the encryption, signing, verification and decryption processes, because these processes only operate inside the trusted environment.
 
 ## 4.3 Relevant Attack Scenarios
 
@@ -157,7 +157,7 @@ An attacker positioned in the untrusted transmission channel intercepts a Secure
 
 The attacker modifies the file contents, metadata, recipient information or other information contained in the package and then forwards the modified package to Bob.
 
-The receiving system must detect the modification before accepting or processing the file.
+The receiving system must detect the modification before processing the file and reject it.
 
 ---
 
@@ -177,7 +177,7 @@ An attacker captures a legitimate Secure Package sent by Alice and stores it.
 
 At a later time, the attacker sends the same package to Bob multiple times in an attempt to make the system process an old transmission as if it were new.
 
-The receiving system must be able to distinguish a new package from a replayed package.
+The receiving system must be able to distinguish a new package from a replayed package by validating the timestamp on the package.
 
 ---
 

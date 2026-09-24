@@ -84,3 +84,107 @@ Only then is the file released to Bob.
 | F8 |  |  |  |
 | F9 |  |  |  |
 | F10 |  |  |  |
+
+# 4. Threat Model
+
+The threat model defines the assets that need protection and the capabilities of the attackers considered by the Secure File Exchange Platform.
+
+## 4.1 Assets
+
+The following assets were identified as relevant to the security of the platform:
+
+| Asset | Why it must be protected |
+| --- | --- |
+| File contents | The original information sent by Alice must remain confidential and must not be modified during transmission. |
+| Metadata | Information associated with the Secure Package must not be modified without detection. |
+| Private keys | Private keys must remain protected inside the trusted environment and must not be available to attackers. |
+| Protected file key | The key used to protect the file must only be recoverable by the intended recipient. |
+| User credentials | Credentials used to access the system must not be obtained by an attacker and used to impersonate a legitimate user. |
+| Sender information | Bob must be able to determine whether the package actually originated from Alice. |
+| Recipient information | An attacker must not be able to replace or modify the intended recipient without detection. |
+| Digital signatures | The signature must remain valid for the original package and must allow the recipient to verify its origin and integrity. |
+| Secure Address Book | The mapping between identities and public keys must remain trustworthy. |
+| Transmission package | The package may be copied, modified, replayed or deleted while passing through the untrusted transmission channel. |
+
+## 4.2 Adversaries
+
+The main adversary considered by the system is an attacker who can operate in the untrusted environment, especially the transmission channel between Alice and Bob.
+
+The attacker may act actively by modifying or replacing information, or  by observing and copying information traveling through the channel.
+
+### External / Network Attacker
+
+An attacker with access to the untrusted transmission channel.
+
+The attacker can:
+
+- Intercept a Secure Package traveling from Alice to Bob.
+- Copy an encrypted package.
+- Read visible or plaintext information contained in the package headers.
+- Modify the contents of a package before it reaches Bob.
+- Modify metadata contained in the package.
+- Remove the sender's signature and attempt to attach another signature.
+- Generate a malicious package and send it to Bob while impersonating Alice.
+- Attempt to impersonate Bob's public key to Alice.
+- Capture a legitimate package and replay it to Bob multiple times.
+- Attempt to recover the protected key from an intercepted encrypted payload.
+- Delete a package before it reaches its intended recipient.
+
+Under the assumptions of this architecture, the attacker cannot:
+
+- Directly access private keys that remain protected inside the trusted environment.
+- Recover the protected file key without the corresponding recipient's private key.
+- Legitimately prove Alice's identity without the cryptographic material associated with Alice.
+- Modify authenticated file contents or metadata without the receiving system being expected to detect the modification.
+- Control the Secure Address Book, since it is considered a trusted component.
+- Directly compromise the encryption, signing, verification and decryption processes, because these processes are assumed to operate inside the trusted environment.
+
+## 4.3 Relevant Attack Scenarios
+
+### Scenario 1 — Sender Identity: Spoofing
+
+An attacker attempts to impersonate Alice and send a malicious or unauthorized package to Bob.
+
+This may happen through stolen user credentials or by generating a package that falsely claims to have been sent by Alice.
+
+The security risk is that Bob could trust a package that did not actually originate from Alice.
+
+---
+
+### Scenario 2 — File Contents: Tampering in Transit
+
+An attacker positioned in the untrusted transmission channel intercepts a Secure Package before it reaches Bob.
+
+The attacker modifies the file contents, metadata, recipient information or other information contained in the package and then forwards the modified package to Bob.
+
+The receiving system must detect the modification before accepting or processing the file.
+
+---
+
+### Scenario 3 — Protected Key: Unauthorized Recovery
+
+Alice creates a Secure Package and sends it to Bob through the untrusted transmission environment.
+
+An attacker intercepts and copies the encrypted package. The attacker isolates the protected key or encrypted payload and attempts to recover the key necessary to access the original file.
+
+The system must ensure that recovery of the protected key depends on possession of the intended recipient's private key.
+
+---
+
+### Scenario 4 — Replay
+
+An attacker captures a legitimate Secure Package sent by Alice and stores it.
+
+At a later time, the attacker sends the same package to Bob multiple times in an attempt to make the system process an old transmission as if it were new.
+
+The receiving system must be able to distinguish a new package from a replayed package.
+
+---
+
+### Scenario 5 — Recipient Information Modification
+
+An attacker intercepts a Secure Package and modifies the recipient information or attempts to replace Bob's information.
+
+The receiving system must detect unauthorized modification of recipient information before accepting the package.
+
+

@@ -66,17 +66,17 @@ Only then is the file released to Bob.
 | ID | Boundary | Why it matters |
 | --- | --- | --- |
 | TB1 | Alice's trusted environment → untrusted zone | Once the package crosses, the attacker can read, copy, modify, delete or replay it. |
-| TB2 | Untrusted zone → Bob's trusted environment | |
-| TB3 | User ↔ Vault | |
-| TB4 | Vault ↔ Key Store and Address Book | |
+| TB2 | Untrusted zone → Bob's trusted environment | Everything arriving is attacker-controlled input until verified. |
+| TB3 | User ↔ Vault | File input and command-line arguments cross here. |
+| TB4 | Vault ↔ Key Store and Address Book | Key import, export and lookup cross here. Wrong keys here defeat every later check. |
 
 ### Data flows
 
 | ID | Flow | Carries | Boundary |
 | --- | --- | --- | --- |
 | F1 | Alice → Vault (sender) | The chosen file | TB3 |
-| F2 |  |  |  |
-| F3 |  |  |  |
+| F2 | Key Store → Vault (sender) | Signing private key, used inside the Vault and never exported | TB4 |
+| F3 | Address Book → Vault (sender) | The recipient's public key | TB4 |
 | F4 |  |  |  |
 | F5 |  |  |  |
 | F6 |  |  |  |
@@ -85,11 +85,25 @@ Only then is the file released to Bob.
 | F9 |  |  |  |
 | F10 |  |  |  |
 
-# 4. Threat Model
+### Where encryption, signing and keys sit
+
+Encryption and signing happen only in the sender's Vault. Signature verification and decryption happen only in the recipient's Vault. None of these operations takes place in the untrusted environment. Private keys are stored only in the Key Stores. Public keys are stored in the Address Books.
+
+## 3. Security Requirements
+| ID | Requirement | Property |
+| --- | --- | --- |
+| SR-01 | An attacker who obtains a Secure Package, by reading it in transit, copying it from storage or capturing it in flight, must not be able to learn anything about the file's content without the intended recipient's private key. | Confidentiality of file contents |
+| SR-02 | If any part of the file content is changed after the sender has packaged it, the recipient's Vault must detect the change and refuse to output a file. | Integrity of file contents |
+| SR-03 | Any change to any part of a Secure Package (visible metadata, recipient information, protected key, encrypted payload or signature), including removal, substitution or reordering of parts, must be detected before the content is processed. A one-byte change must be enough to trigger detection. | Protection against tampering |
+| SR-04 | The recipient's Vault must accept a package as coming from Alice only if its signature verifies against the public key the Secure Address Book holds for Alice. An attacker without Alice's private key must not be able to produce a package that Bob accepts as coming from her. | Authenticity of the sender |
+| | |
+---
+
+## 4. Threat Model
 
 The threat model defines the assets that need protection and the capabilities of the attackers considered by the Secure File Exchange Platform.
 
-## 4.1 Assets
+### 4.1 Assets
 
 The following assets were identified as relevant to the security of the platform:
 
@@ -106,7 +120,7 @@ The following assets were identified as relevant to the security of the platform
 | Secure Address Book | The mapping between identities and public keys must remain trustworthy. | Authenticity and integrity |
 | Transmission package | The package may be copied, modified, replayed or deleted while passing through the untrusted transmission channel. | Confidentiality and integrity |
 
-## 4.2 Adversaries
+### 4.2 Adversaries
 
 The main adversary considered by the system is an attacker that is assumed to know exactly how the platformn works and can operate in the untrusted environment, especially the transmission channel between Alice and Bob.
 
@@ -139,7 +153,7 @@ Under the assumptions of this architecture, the attacker cannot:
 - Control the Secure Address Book, since it is considered a trusted component.
 - Directly compromise the encryption, signing, verification and decryption processes, because these processes only operate inside the trusted environment.
 
-## 4.3 Relevant Attack Scenarios
+### 4.3 Relevant Attack Scenarios
 
 ### Scenario 1 — Sender Identity: Spoofing
 

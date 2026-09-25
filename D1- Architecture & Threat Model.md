@@ -201,4 +201,12 @@ An attacker intercepts a Secure Package and modifies the recipient information o
 
 The receiving system must detect unauthorized modification of recipient information before accepting the package.
 
+## 5. Trust Assumptions
 
+1. Users act without malicios intent: It is assumed that both Alice and Bob have good intentions and do not seek to harme the system, as they are vital for initiating and completing the exchange.
+2. The original file is safe: It is assumed that the file the sender selects to transmit is trusted from ist origin and does not contain inherent malicious payloads.
+3. Local cryptographic processes operate flawlessly: It is assumed that processes occurring in trusted enviroments, such as encryption, signature generation and verification, timestamp validation and decryption work securely and flawlessly.
+4. Public keys are authentic: It is assumed that the secure address book functions properly as an infallible means to map and validate identities with their respective public keys.
+5. The transmission channel is an untrusted enviroment: The system assumes it has not control over the transit network or channel, treating it as an enviroment with unceirtain security where packages can be intercepted and altered.
+6. The integrity of a received package is uncertain: It is assumed that any newrly arrived package from the transit channel is untrusted until it passes through the local verification and decryption.
+7. Attackers have malicious intentions: It is assumed that any external actor in the transit channel has the sole objective of harming system components and violating the data carried by the package.

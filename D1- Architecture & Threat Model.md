@@ -77,13 +77,13 @@ Only then is the file released to Bob.
 | F1 | Alice → Vault (sender) | The chosen file | TB3 |
 | F2 | Key Store → Vault (sender) | Signing private key, used inside the Vault and never exported | TB4 |
 | F3 | Address Book → Vault (sender) | The recipient's public key | TB4 |
-| F4 |  |  |  |
-| F5 |  |  |  |
-| F6 |  |  |  |
-| F7 |  |  |  |
-| F8 |  |  |  |
-| F9 |  |  |  |
-| F10 |  |  |  |
+| F4 | Vault (sender) → untrusted zone | The Secure Package | TB1 |
+| F5 | Untrusted zone → Vault (recipient) | The received package, still untrusted | TB2 |
+| F6 | Bob → Vault (recipient) | command-line arguments | TB3 |
+| F7 | Address Book → Vault (recipient) | The sender's public key, to verify the signature | TB4 |
+| F8 | Key Store → Vault (recipient) | Decryption private key, used inside the Vault | TB4 |
+| F9 | Vault (recipient) → Bob | The original file | TB3 |
+| F10 | Attacker ↔ untrusted zone | Read, copy, modify, delete, replay | None |
 
 ### Where encryption, signing and keys sit
 
@@ -96,6 +96,8 @@ Encryption and signing happen only in the sender's Vault. Signature verification
 | SR-02 | If any part of the file content is changed after the sender has packaged it, the recipient's Vault must detect the change and refuse to output a file. | Integrity of file contents |
 | SR-03 | Any change to any part of a Secure Package (visible metadata, recipient information, protected key, encrypted payload or signature), including removal, substitution or reordering of parts, must be detected before the content is processed. A one-byte change must be enough to trigger detection. | Protection against tampering |
 | SR-04 | The recipient's Vault must accept a package as coming from Alice only if its signature verifies against the public key the Secure Address Book holds for Alice. An attacker without Alice's private key must not be able to produce a package that Bob accepts as coming from her. | Authenticity of the sender |
+| SR-05 | A valid package that an attacker captured and sends again, once or many times, must not be accepted as a new package. | Freshness |
+| SR-06 | The recipient's Vault must finish every check (freshness, signature) before it decrypts or releases anything. Any failure must stop processing without leaving partial plaintext or other usable output, and a malformed package must be rejected without unsafe behavior. | Safe failure and ordered processing |
 | | |
 ---
 

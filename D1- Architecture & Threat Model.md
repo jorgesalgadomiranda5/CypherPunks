@@ -8,12 +8,12 @@ Criptografía · Semester 2027-1 · Group 04
 
 Teacher: Dra. Rocío Alejandra Aldeco Pérez · Delivery date: 26/09/2026
 
-**Team 05:** 
-· Arroyo Ramírez Carlos Alberto 
-· Escudero Bohórquez Julio 
-· Martínez Miranda Juan Carlos 
-· Pérez Avin Paola Celina de Jesús 
-· Salgado Miranda Jorge
+**Team 05:** <br>
+· Arroyo Ramírez Carlos Alberto <br>
+· Escudero Bohórquez Julio <br>
+· Martínez Miranda Juan Carlos <br>
+· Pérez Avin Paola Celina de Jesús <br>
+· Salgado Miranda Jorge <br>
 
 ---
 ## 1. System Overview
@@ -98,6 +98,9 @@ Encryption and signing happen only in the sender's Vault. Signature verification
 | SR-04 | The recipient's Vault must accept a package as coming from Alice only if its signature verifies against the public key the Secure Address Book holds for Alice. An attacker without Alice's private key must not be able to produce a package that Bob accepts as coming from her. | Authenticity of the sender |
 | SR-05 | A valid package that an attacker captured and sends again, once or many times, must not be accepted as a new package. | Freshness |
 | SR-06 | The recipient's Vault must finish every check (freshness, signature) before it decrypts or releases anything. Any failure must stop processing without leaving partial plaintext or other usable output, and a malformed package must be rejected without unsafe behavior. | Safe failure and ordered processing |
+| SR-07 | What is visible without the recipient's key must be limited to what is needed to route and validate a package. Descriptive properties of the file, such as its name and type, must travel only in the protected part. | Metadata minimization |
+| SR-08 | Private keys must never leave the Key Store in usable form.  | Confidentiality |
+| SR-10 | Only authentic public keys may be used to protect a file for a recipient or to verify a sender. An attacker must not be able to add, replace or remove Address Book entries without the change being detected. | Authenticity of public keys |
 | | |
 ---
 
@@ -109,18 +112,18 @@ The threat model defines the assets that need protection and the capabilities of
 
 The following assets were identified as relevant to the security of the platform:
 
-| Asset | Why it must be protected | What must hold |
-| --- | --- | --- |
-| File contents | The original information sent by Alice must remain confidential and must not be modified during transmission. | Confidentiality and integrity |
-| Metadata | Information associated with the Secure Package must not be modified without detection. | Confidentiality and integrity |
-| Private keys | Private keys must remain protected inside the trusted environment and must not be available to attackers. | Confidentiality |
-| Protected file key | The key used to protect the file must only be recoverable by the intended recipient. | Confidentiality |
-| User credentials | Credentials used to access the system must not be obtained by an attacker and used to impersonate a legitimate user. | Confidentiality |
-| Sender information | Bob must be able to determine whether the package actually originated from Alice. | Authenticity |
-| Recipient information | An attacker must not be able to replace or modify the intended recipient without detection. | Integrity and authenticity |
-| Digital signatures | The signature must remain valid for the original package and must allow the recipient to verify its origin and integrity. | Confidentiality |
-| Secure Address Book | The mapping between identities and public keys must remain trustworthy. | Authenticity and integrity |
-| Transmission package | The package may be copied, modified, replayed or deleted while passing through the untrusted transmission channel. | Confidentiality and integrity |
+| ID | Asset | Why it must be protected | What must hold |
+| --- | --- | --- | --- |
+| A1 | File contents | The original information sent by Alice must remain confidential and must not be modified during transmission. | Confidentiality and integrity |
+| A2 | Metadata | Information associated with the Secure Package must not be modified without detection. | Confidentiality and integrity |
+| A3 | Private keys | Private keys must remain protected inside the trusted environment and must not be available to attackers. | Confidentiality |
+| A4 | Protected file key | The key used to protect the file must only be recoverable by the intended recipient. | Confidentiality |
+| A5 | User credentials | Credentials used to access the system must not be obtained by an attacker and used to impersonate a legitimate user. | Confidentiality |
+| A6 | Sender information | Bob must be able to determine whether the package actually originated from Alice. | Authenticity |
+| A7 | Recipient information | An attacker must not be able to replace or modify the intended recipient without detection. | Integrity and authenticity |
+| A8 | Digital signatures | The signature must remain valid for the original package and must allow the recipient to verify its origin and integrity. | Confidentiality |
+| A9 | Secure Address Book | The mapping between identities and public keys must remain trustworthy. | Authenticity and integrity |
+| A10 | Transmission package | The package may be copied, modified, replayed or deleted while passing through the untrusted transmission channel. | Confidentiality and integrity |
 
 ### 4.2 Adversaries
 
@@ -205,10 +208,10 @@ The receiving system must detect unauthorized modification of recipient informat
 
 ## 5. Trust Assumptions
 
-1. Users act without malicios intent: It is assumed that both Alice and Bob have good intentions and do not seek to harme the system, as they are vital for initiating and completing the exchange.
-2. The original file is safe: It is assumed that the file the sender selects to transmit is trusted from ist origin and does not contain inherent malicious payloads.
+1. Users act without malicios intent: It is assumed that both Alice and Bob have good intentions and do not seek to harm the system, as they are vital for initiating and completing the exchange.
+2. The original file is safe: It is assumed that the file the sender selects to transmit is trusted from its origin and does not contain inherent malicious payloads.
 3. Local cryptographic processes operate flawlessly: It is assumed that processes occurring in trusted enviroments, such as encryption, signature generation and verification, timestamp validation and decryption work securely and flawlessly.
 4. Public keys are authentic: It is assumed that the secure address book functions properly as an infallible means to map and validate identities with their respective public keys.
 5. The transmission channel is an untrusted enviroment: The system assumes it has not control over the transit network or channel, treating it as an enviroment with unceirtain security where packages can be intercepted and altered.
-6. The integrity of a received package is uncertain: It is assumed that any newrly arrived package from the transit channel is untrusted until it passes through the local verification and decryption.
+6. The integrity of a received package is uncertain: It is assumed that any newly arrived package from the transit channel is untrusted until it passes through the local verification and decryption.
 7. Attackers have malicious intentions: It is assumed that any external actor in the transit channel has the sole objective of harming system components and violating the data carried by the package.

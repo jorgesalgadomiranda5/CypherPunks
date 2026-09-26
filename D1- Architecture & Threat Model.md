@@ -215,3 +215,22 @@ The receiving system must detect unauthorized modification of recipient informat
 5. The transmission channel is an untrusted enviroment: The system assumes it has not control over the transit network or channel, treating it as an enviroment with unceirtain security where packages can be intercepted and altered.
 6. The integrity of a received package is uncertain: It is assumed that any newly arrived package from the transit channel is untrusted until it passes through the local verification and decryption.
 7. Attackers have malicious intentions: It is assumed that any external actor in the transit channel has the sole objective of harming system components and violating the data carried by the package.
+
+## 6. Attack Surface Review
+
+The main entry points where an attacker could interact with the Secure File Exchange Platform are:
+
+| Entry point                | What could go wrong?                                                                                                                                                                                                     | Security property at risk                           |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------- |
+| **File input**             | A malicious or unexpected file could be selected and processed by the Vault. Although the architecture assumes the original file is trusted, file input is still a point where untrusted content could enter the system. | File integrity, safe processing                     |
+| **Metadata parsing**       | An attacker could modify visible metadata or provide malformed package metadata. If the metadata is not properly validated, the Vault could interpret the package incorrectly.                                           | Integrity, authenticity, safe failure               |
+| **Key import/export**      | Unauthorized or incorrect public/private key material could be introduced. If a private key were exposed outside the Key Store, an attacker could compromise confidentiality or impersonate a user.                      | Key confidentiality, authenticity                   |
+| **Password entry**         | User credentials could be exposed or misused, allowing an attacker to access the user's trusted environment or cryptographic material.                                                                                   | Credential confidentiality, authentication          |
+| **Sharing workflow**       | An attacker controlling the transmission channel could intercept, copy, modify, replace, delete, or replay a Secure Package.                                                                                             | Confidentiality, integrity, authenticity, freshness |
+| **Signature verification** | If the wrong public key were used or signature verification were bypassed, a package could be accepted as if it came from an authorized sender.                                                                          | Sender authenticity, integrity                      |
+| **CLI arguments**          | Malicious or malformed command-line arguments could cause the Vault to process an unintended file, package, or operation.                                                                                                | Integrity, safe failure                             |
+
+These entry points are important because the architecture treats anything coming from the untrusted environment as attacker-controlled input until the necessary checks have been completed. In particular, file input and command-line arguments cross the User ↔ Vault boundary, key operations and public-key lookup cross the Vault and Key Store/Address Book boundary, and the Secure Package crosses the untrusted transmission boundary.
+
+Because of this, the receiving side must validate the package before releasing any plaintext. Freshness and signature verification are performed before key recovery and decryption. If any of these checks fail, the package is rejected and no plaintext is released.
+

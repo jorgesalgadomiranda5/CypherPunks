@@ -220,8 +220,8 @@ The receiving system must detect unauthorized modification of recipient informat
 
 The main entry points where an attacker could interact with the Secure File Exchange Platform are:
 
-| Entry point                | What could go wrong?                                                                                                                                                                                                     | Security property at risk                           |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------- |
+| Entry point | What could go wrong? | Security property at risk |
+| --- | --- | --- |
 | **File input**             | A malicious or unexpected file could be selected and processed by the Vault. Although the architecture assumes the original file is trusted, file input is still a point where untrusted content could enter the system. | File integrity, safe processing                     |
 | **Metadata parsing**       | An attacker could modify visible metadata or provide malformed package metadata. If the metadata is not properly validated, the Vault could interpret the package incorrectly.                                           | Integrity, authenticity, safe failure               |
 | **Key import/export**      | Unauthorized or incorrect public/private key material could be introduced. If a private key were exposed outside the Key Store, an attacker could compromise confidentiality or impersonate a user.                      | Key confidentiality, authenticity                   |
@@ -229,6 +229,7 @@ The main entry points where an attacker could interact with the Secure File Exch
 | **Sharing workflow**       | An attacker controlling the transmission channel could intercept, copy, modify, replace, delete, or replay a Secure Package.                                                                                             | Confidentiality, integrity, authenticity, freshness |
 | **Signature verification** | If the wrong public key were used or signature verification were bypassed, a package could be accepted as if it came from an authorized sender.                                                                          | Sender authenticity, integrity                      |
 | **CLI arguments**          | Malicious or malformed command-line arguments could cause the Vault to process an unintended file, package, or operation.                                                                                                | Integrity, safe failure                             |
+| **Freshness validation** | Clock manipulation, or a lost or reset record of processed packages, makes replays acceptable. | Freshness |
 
 These entry points are important because the system treats anything coming from outside as potentially untrusted until it has been checked. File input and command-line arguments enter through the User and Vault boundary, while key operations and public-key lookup involve the Vault and Key Store/Address Book boundary. The Secure Package also passes through an untrusted transmission channel, so the receiving side must check it before releasing any plaintext. Freshness and the signature are verified before recovering the key and decrypting the file. If any check fails, the package is rejected and no plaintext is released.
 

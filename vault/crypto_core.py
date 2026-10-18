@@ -114,6 +114,9 @@ def encrypt(key: bytes, plaintext: bytes, aad: bytes) -> tuple[bytes, bytes]:
     covers both the ciphertext and the AAD.
     """
     _check_key(key)
+    if not aad:
+        # Without AAD the metadata would not be bound to the ciphertext.
+        raise VaultError("AAD (container header) is required")
     nonce = generate_nonce()
     ciphertext_with_tag = AESGCM(key).encrypt(nonce, plaintext, aad)
     return nonce, ciphertext_with_tag

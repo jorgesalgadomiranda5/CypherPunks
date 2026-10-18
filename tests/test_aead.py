@@ -53,6 +53,12 @@ def test_short_key_rejected():
         crypto_core.encrypt(b"too short", PLAINTEXT, AAD)
 
 
+@pytest.mark.parametrize("aad", [None, b""])
+def test_encrypt_requires_aad(aad):
+    with pytest.raises(VaultError):
+        crypto_core.encrypt(crypto_core.generate_key(), PLAINTEXT, aad)
+
+
 # Required: modified ciphertext fails
 @pytest.mark.parametrize("index", [0, 10, -17])
 def test_modified_ciphertext_fails(encrypted, index):

@@ -43,6 +43,8 @@ def build_parser() -> argparse.ArgumentParser:
     dec.add_argument("input")
     dec.add_argument("-k", "--key", required=True, help="key file produced by encrypt")
     dec.add_argument("-o", "--output", help="output path (default: original name)")
+    dec.add_argument("-f", "--force", action="store_true",
+                     help="overwrite the output file if it already exists")
     return parser
 
 
@@ -57,7 +59,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Key       -> {key_path}  (keep it safe; it is not in the container)")
         else:
             key = _read_key(args.key)
-            out = file_vault.decrypt_file(args.input, key, output_path=args.output)
+            out = file_vault.decrypt_file(args.input, key, output_path=args.output,
+                                         overwrite=args.force)
             print(f"Decrypted -> {out}")
         return 0
     except IntegrityError:

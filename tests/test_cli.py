@@ -1,6 +1,8 @@
 """Tests for the command-line interface."""
 import os
 
+import pytest
+
 from vault import cli
 
 
@@ -39,11 +41,25 @@ def test_cli_missing_input(tmp_path):
     assert cli.main(["encrypt", str(tmp_path / "nope.pdf")]) == 1
 
 
+@pytest.mark.skipif(os.name != "posix", reason="file modes are POSIX-only")
 def test_key_file_permissions(tmp_path):
-    if os.name != "posix":
-        return
     src = tmp_path / "p.pdf"
     src.write_bytes(b"x")
     key = tmp_path / "p.key"
     cli.main(["encrypt", str(src), "-k", str(key)])
     assert (key.stat().st_mode & 0o777) == 0o600
+
+
+def test_cli_refuses_to_overwrite_without_force(tmp_path):
+    src = tmp_path / "f.pdf"
+    src.write_bytes(b"%PDF-1.4 original")
+    sdv, key = tmp_path / "f.sdv", tmp_path / "f.key"
+    cli.main(["encrypt", str(src), "-o", str(sdv), "-k", str(key)])
+
+    out = tmp_path / "existing.pdf"
+    out.write_bytes(b"do not touch")
+    assert cli.main(["decrypt", str(sdv), "-k", str(key), "-o", str(out)]) == 1
+    assert out.read_bytes() == b"do not touch"
+
+    assert cli.main(["decrypt", str(sdv), "-k", str(key), "-o", str(out), "--force"]) == 0
+    assert out.read_bytes() == src.read_bytes()

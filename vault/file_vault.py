@@ -64,7 +64,7 @@ def decrypt_bytes(data: bytes, key: bytes) -> tuple[dict, bytes]:
 
 
 def decrypt_file(container_path: str, key: bytes, output_path: str | None = None,
-                 output_dir: str | None = None) -> str:
+                 output_dir: str | None = None, overwrite: bool = False) -> str:
     """Decrypt a .sdv container and write the original file.
 
     If no output_path is given, the authenticated original name is used
@@ -83,6 +83,7 @@ def decrypt_file(container_path: str, key: bytes, output_path: str | None = None
         name = os.path.basename(metadata["original_name"]) or "decrypted.bin"
         output_dir = output_dir or os.path.dirname(os.path.abspath(container_path))
         output_path = os.path.join(output_dir, name)
-
+    if os.path.exists(output_path) and not overwrite:
+        raise VaultError(f"Output file already exists: {output_path}")
     _atomic_write(output_path, plaintext)
     return output_path

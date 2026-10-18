@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from vault import container, crypto_core, file_vault
-from vault.exceptions import ContainerFormatError, IntegrityError
+from vault.exceptions import ContainerFormatError, IntegrityError, VaultError
 
 PDF_LIKE = b"%PDF-1.7\n" + os.urandom(4096) + b"\n%%EOF\n"
 
@@ -115,3 +115,19 @@ def test_failed_decryption_writes_nothing(sample, tmp_path):
         file_vault.decrypt_file(sdv, crypto_core.generate_key(), output_path=str(target))
     assert not target.exists()
     assert not [f for f in os.listdir(tmp_path) if f.startswith(".vault-tmp-")]
+
+
+def test_decrypt_does_not_overwrite_existing_file(sample):
+    # Default output is the original name in the same folder: the original.
+    sdv, key = file_vault.encrypt_file(str(sample))
+    sample.write_bytes(b"newer local version")
+    with pytest.raises(VaultError):
+        file_vault.decrypt_file(sdv, key)
+    assert sample.read_bytes() == b"newer local version"
+
+
+def test_decrypt_overwrite_when_requested(sample):
+    sdv, key = file_vault.encrypt_file(str(sample))
+    sample.write_bytes(b"newer local version")
+    file_vault.decrypt_file(sdv, key, overwrite=True)
+    assert sample.read_bytes() == PDF_LIKE

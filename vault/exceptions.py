@@ -20,3 +20,11 @@ class IntegrityError(VaultError):
 
 class ContainerFormatError(VaultError):
     """The container is malformed and cannot even be parsed."""
+
+
+class KeyManagementError(VaultError):
+    """A key pair could not be generated, loaded or used.
+
+    Covers a wrong passphrase, a corrupt PEM file, a non-RSA key and RSA keys
+    below the minimum size.
+    """

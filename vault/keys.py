@@ -9,9 +9,12 @@ from vault.exceptions import KeyManagementError
 
 RSA_KEY_SIZE = 3072
 PUBLIC_EXPONENT = 65537
+MIN_RSA_KEY_SIZE = 3072
 
 
 def generate_keypair(key_size: int = RSA_KEY_SIZE) -> rsa.RSAPrivateKey:
+    if key_size < MIN_RSA_KEY_SIZE:
+        raise KeyManagementError(f"RSA keys must be at least {MIN_RSA_KEY_SIZE} bits")
     return rsa.generate_private_key(public_exponent=PUBLIC_EXPONENT, key_size=key_size)
 
 
@@ -34,6 +37,7 @@ def load_private_key(path: str | Path, passphrase: bytes) -> rsa.RSAPrivateKey:
         key = serialization.load_pem_private_key(Path(path).read_bytes(), password=passphrase)
     except (OSError, ValueError, TypeError) as exc:
         raise KeyManagementError("Could not load private key (wrong passphrase or corrupt file)") from exc
+    _check_rsa(key.public_key())
     return key
 
 
@@ -61,6 +65,7 @@ def public_key_from_pem(data: bytes) -> rsa.RSAPublicKey:
         key = serialization.load_pem_public_key(data)
     except ValueError as exc:
         raise KeyManagementError("Invalid public key") from exc
+    _check_rsa(key)
     return key
 
 
@@ -71,3 +76,10 @@ def key_id(public_key: rsa.RSAPublicKey) -> str:
         format=serialization.PublicFormat.SubjectPublicKeyInfo,
     )
     return hashlib.sha256(der).hexdigest()
+
+
+def _check_rsa(key) -> None:
+    if not isinstance(key, rsa.RSAPublicKey):
+        raise KeyManagementError("Only RSA keys are supported")
+    if key.key_size < MIN_RSA_KEY_SIZE:
+        raise KeyManagementError(f"RSA keys must be at least {MIN_RSA_KEY_SIZE} bits")

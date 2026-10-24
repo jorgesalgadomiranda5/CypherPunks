@@ -14,6 +14,7 @@ or swapping recipients makes the tag check fail for everyone.
 """
 import base64
 import json
+import re
 import struct
 from dataclasses import dataclass, field
 
@@ -25,8 +26,12 @@ FORMAT_VERSION = "2.0"
 LENGTH_FORMAT = ">I"
 LENGTH_SIZE = struct.calcsize(LENGTH_FORMAT)
 MAX_HEADER_SIZE = 64 * 1024
+
+MAX_RECIPIENTS = 64  # Added for step 5!
+
 ALGORITHMS = {"aead": "AES-256-GCM", "key_wrap": "RSA-OAEP-SHA256", "key_id": "SHA256-SPKI"}
 
+_KID_PATTERN = re.compile(r"^[0-9a-f]{64}$")  # Added for step 5!
 
 @dataclass(frozen=True)
 class RecipientEntry:
@@ -133,6 +138,20 @@ def _validate_header(header: Header) -> None:
         raise ContainerFormatError("Unsupported algorithm identifiers")
     if not isinstance(header.metadata, dict):
         raise ContainerFormatError("Metadata must be a JSON object")
+
+        # Check the number of recipients.
+    if not 1 <= len(header.recipients) <= MAX_RECIPIENTS:
+        raise ContainerFormatError("Recipient count out of range")
+
+    # Reject repeated key IDs.
+    kids = [r.kid for r in header.recipients]
+    if len(set(kids)) != len(kids):
+        raise ContainerFormatError("Duplicate recipient key ID")
+
+    # Check the format of each key ID.
+    for kid in kids:
+        if not isinstance(kid, str) or not _KID_PATTERN.match(kid):
+            raise ContainerFormatError("Invalid key ID")
 
 
 def _b64e(data: bytes) -> str:

@@ -15,6 +15,28 @@ def generate_keypair(key_size: int = RSA_KEY_SIZE) -> rsa.RSAPrivateKey:
     return rsa.generate_private_key(public_exponent=PUBLIC_EXPONENT, key_size=key_size)
 
 
+def save_private_key(private_key: rsa.RSAPrivateKey, path: str | Path, passphrase: bytes) -> None:
+    """Write the private key as PKCS#8 PEM, always encrypted with a passphrase."""
+    if not passphrase:
+        raise KeyManagementError("A passphrase is required to store a private key")
+    pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.BestAvailableEncryption(passphrase),
+    )
+    path = Path(path)
+    path.write_bytes(pem)
+    path.chmod(0o600)
+
+
+def load_private_key(path: str | Path, passphrase: bytes) -> rsa.RSAPrivateKey:
+    try:
+        key = serialization.load_pem_private_key(Path(path).read_bytes(), password=passphrase)
+    except (OSError, ValueError, TypeError) as exc:
+        raise KeyManagementError("Could not load private key (wrong passphrase or corrupt file)") from exc
+    return key
+
+
 def save_public_key(public_key: rsa.RSAPublicKey, path: str | Path) -> None:
     Path(path).write_bytes(public_key_to_pem(public_key))
 

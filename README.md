@@ -27,3 +27,4 @@ Decryption never overwrites an existing file; add `--force` to allow it.
 python -m pytest -v
 ```
 
+## D3: Hybrid Encryption (multi-recipient sharing)

@@ -83,6 +83,31 @@ def test_unauthorized_user_cannot_decrypt(shared, eve):
     with pytest.raises(IntegrityError):
         hybrid.decrypt_as_recipient(shared, eve)
 
+# Required test 3
+def test_tampered_recipient_list_fails(shared, bob, eve):
+    eve_kid = keys.key_id(eve.public_key())
+    eve_wrap = keywrap.wrap_file_key(eve.public_key(), b"\x00" * 32)
+
+    def add_eve(header):
+        header["recipients"].append({"kid": eve_kid, "encrypted_key": container_v2._b64e(eve_wrap)})
+        header["recipients"].sort(key=lambda r: r["kid"])
+
+    tampered = _rewrite_header(shared, add_eve)
+    for key in (bob, eve):
+        with pytest.raises(IntegrityError):
+            hybrid.decrypt_as_recipient(tampered, key)
+
+
+def test_swapped_identities_fail(shared, alice, bob):
+    """Swap the encrypted_key values between the Alice and Bob entries."""
+    def swap(header):
+        a, b = header["recipients"]
+        a["encrypted_key"], b["encrypted_key"] = b["encrypted_key"], a["encrypted_key"]
+
+    tampered = _rewrite_header(shared, swap)
+    for key in (alice, bob):
+        with pytest.raises(IntegrityError):
+            hybrid.decrypt_as_recipient(tampered, key)
 
 # Required test 5
 def test_removing_recipient_entry_breaks_access(shared, alice, bob):

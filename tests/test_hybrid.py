@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from vault import container_v2, crypto_core, hybrid, keys, keywrap
+from vault import cli, container_v2, crypto_core, hybrid, keys, keywrap
 from vault.exceptions import IntegrityError, KeyManagementError, VaultError
 
 PLAINTEXT = b"%PDF-1.7\n" + b"contenido confidencial " * 2000
@@ -136,3 +136,60 @@ def test_removing_recipient_entry_breaks_access(shared, alice, bob):
         hybrid.decrypt_as_recipient(tampered, bob)
     with pytest.raises(IntegrityError):  # AAD changed, so Alice fails too
         hybrid.decrypt_as_recipient(tampered, alice)
+# --- Extra attack tests -----------------------------------------------------
+def test_each_recipient_gets_different_wrapped_key(shared):
+    wraps = [r.encrypted_key for r in container_v2.unpack(shared).header.recipients]
+    assert len(set(wraps)) == len(wraps)
+
+
+def test_file_is_encrypted_once(shared):
+    assert len(shared) < len(PLAINTEXT) + 4096  # one ciphertext, not one per recipient
+
+
+def test_algorithm_downgrade_fails(shared, alice):
+    def downgrade(header):
+        header["algorithms"]["key_wrap"] = "RSA-PKCS1v15"
+
+    tampered = _rewrite_header(shared, downgrade)
+    with pytest.raises(IntegrityError):
+        hybrid.decrypt_as_recipient(tampered, alice)
+
+
+def test_ciphertext_bitflip_fails(shared, alice):
+    tampered = bytearray(shared)
+    tampered[-20] ^= 0x01
+    with pytest.raises(IntegrityError):
+        hybrid.decrypt_as_recipient(bytes(tampered), alice)
+
+
+def test_truncated_container_fails(shared, alice):
+    with pytest.raises(IntegrityError):
+        hybrid.decrypt_as_recipient(shared[:50], alice)
+
+
+def test_duplicate_recipient_rejected(alice):
+    with pytest.raises(VaultError):
+        hybrid.encrypt_for_recipients(PLAINTEXT, [alice.public_key(), alice.public_key()])
+
+
+def test_cli_share_open_and_recipients(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(cli.getpass, "getpass", lambda prompt="": "pass-phrase")
+    for name in ("alice", "bob", "eve"):
+        assert cli.main(["keygen", name, "-d", str(tmp_path)]) == 0
+    src = tmp_path / "report.pdf"
+    src.write_bytes(PLAINTEXT)
+    sdv = tmp_path / "report.pdf.sdv"
+
+    assert cli.main(["share", str(src), "-r", str(tmp_path / "alice.pub.pem"),
+                     "-r", str(tmp_path / "bob.pub.pem")]) == 0
+    capsys.readouterr()
+    assert cli.main(["recipients", str(sdv)]) == 0
+    assert len(capsys.readouterr().out.split()) == 2
+
+    out = tmp_path / "bob.pdf"
+    assert cli.main(["open", str(sdv), "-i", str(tmp_path / "bob.key.pem"), "-o", str(out)]) == 0
+    assert out.read_bytes() == PLAINTEXT
+
+    denied = tmp_path / "eve.pdf"
+    assert cli.main(["open", str(sdv), "-i", str(tmp_path / "eve.key.pem"), "-o", str(denied)]) == 2
+    assert not denied.exists()

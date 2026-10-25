@@ -6,13 +6,15 @@ from cryptography.hazmat.primitives.asymmetric import padding, rsa
 
 from vault.exceptions import IntegrityError
 
+OAEP_LABEL = b"SDV2/file-key"
+WRAP_ALGORITHM = "RSA-OAEP-SHA256"
 
 def _oaep() -> padding.OAEP:
     """Configure RSA-OAEP with SHA-256."""
     return padding.OAEP(
         mgf=padding.MGF1(algorithm=hashes.SHA256()),
         algorithm=hashes.SHA256(),
-        label=None,
+        label=OAEP_LABEL,
     )
 
 

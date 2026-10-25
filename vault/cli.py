@@ -2,6 +2,7 @@
 
     python -m vault encrypt <file> [-o out.sdv] [-k out.key]
     python -m vault decrypt <file.sdv> -k <file.key> [-o out_file]
+    python -m vault keygen <name> [-d folder]
     python -m vault share <file> -r alice.pub.pem -r bob.pub.pem [-o out.sdv]
     python -m vault open <file.sdv> -i bob.key.pem [-o out_file]
 
@@ -41,12 +42,27 @@ def _read_input(path: str) -> bytes:
     with open(path, "rb") as fh:
         return fh.read()
 
-
-def _ask_passphrase() -> bytes:
+def _ask_passphrase(confirm: bool = False) -> bytes:
     passphrase = getpass.getpass("Private key passphrase: ")
+    if confirm and passphrase != getpass.getpass("Repeat passphrase: "):
+        raise VaultError("Passphrases do not match")
     if not passphrase:
         raise VaultError("A passphrase is required")
     return passphrase.encode("utf-8")
+
+
+def _cmd_keygen(args) -> None:
+    os.makedirs(args.dir, exist_ok=True)
+    private_path = os.path.join(args.dir, f"{args.name}.key.pem")
+    public_path = os.path.join(args.dir, f"{args.name}.pub.pem")
+    if os.path.exists(private_path):
+        raise VaultError(f"Key already exists: {private_path}")
+    private_key = keys.generate_keypair()
+    keys.save_private_key(private_key, private_path, _ask_passphrase(confirm=True))
+    keys.save_public_key(private_key.public_key(), public_path)
+    print(f"Private key -> {private_path}  (never share it)")
+    print(f"Public key  -> {public_path}")
+    print(f"Key ID      -> {keys.key_id(private_key.public_key())}")
 
 
 def _cmd_share(args) -> None:
@@ -83,7 +99,9 @@ def build_parser() -> argparse.ArgumentParser:
     dec.add_argument("-o", "--output", help="output path (default: original name)")
     dec.add_argument("-f", "--force", action="store_true",
                      help="overwrite the output file if it already exists")
-    
+    kg = sub.add_parser("keygen", help="create an RSA key pair for sharing (D3)")
+    kg.add_argument("name", help="writes <name>.key.pem and <name>.pub.pem")
+    kg.add_argument("-d", "--dir", default=".", help="output folder (default: current folder)")
     sh = sub.add_parser("share", help="encrypt a file for one or more recipients (D3)")
     sh.add_argument("input")
     sh.add_argument("-r", "--recipient", action="append", required=True,
@@ -115,6 +133,8 @@ def main(argv: list[str] | None = None) -> int:
             out = file_vault.decrypt_file(args.input, key, output_path=args.output,
                                          overwrite=args.force)
             print(f"Decrypted -> {out}")
+        elif args.command == "keygen":
+            _cmd_keygen(args)
         elif args.command == "share":
             _cmd_share(args)
         else:

@@ -5,6 +5,7 @@
     python -m vault keygen <name> [-d folder]
     python -m vault share <file> -r alice.pub.pem -r bob.pub.pem [-o out.sdv]
     python -m vault open <file.sdv> -i bob.key.pem [-o out_file]
+    python -m vault recipients <file.sdv>
 
 D2 note: the per-file key is saved as hex in a separate .key file so the
 owner can decrypt later. Protecting that key (Key Store, password, public
@@ -82,7 +83,10 @@ def _cmd_open(args) -> None:
     file_vault._atomic_write(out, hybrid.decrypt_as_recipient(data, private_key))
     print(f"Decrypted -> {out}")
 
-
+def _cmd_recipients(args) -> None:
+    """Display the key IDs of authorized recipients."""
+    for kid in hybrid.list_recipients(_read_input(args.input)):
+        print(kid)
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="vault", description="Secure Digital Document Vault (D2-D3)")
@@ -116,6 +120,12 @@ def build_parser() -> argparse.ArgumentParser:
     op.add_argument("-o", "--output", help="output path (default: input without .sdv)")
     op.add_argument("-f", "--force", action="store_true",
                     help="overwrite the output file if it already exists")
+    # Command to display authorized recipients.
+    rc = sub.add_parser(
+        "recipients",
+        help="list the key IDs that can open a container (D3)"
+    )
+    rc.add_argument("input")
     return parser
 
 
@@ -137,8 +147,10 @@ def main(argv: list[str] | None = None) -> int:
             _cmd_keygen(args)
         elif args.command == "share":
             _cmd_share(args)
-        else:
+        elif args.command == "open":
             _cmd_open(args)
+        else:
+            _cmd_recipients(args)
         return 0
         
     except IntegrityError:

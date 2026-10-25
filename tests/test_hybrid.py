@@ -109,6 +109,21 @@ def test_swapped_identities_fail(shared, alice, bob):
         with pytest.raises(IntegrityError):
             hybrid.decrypt_as_recipient(tampered, key)
 
+# Required test 4
+def test_wrong_private_key_fails(alice, bob, eve):
+    blob = hybrid.encrypt_for_recipients(PLAINTEXT, [alice.public_key(), bob.public_key()])
+    parts = container_v2.unpack(blob)
+    entry = container_v2.find_recipient(parts.header, keys.key_id(bob.public_key()))
+    with pytest.raises(IntegrityError):
+        keywrap.unwrap_file_key(eve, entry.encrypted_key)
+
+
+def test_wrong_public_key_at_encryption_locks_out_intended_recipient(alice, eve):
+    """If the sender uses the wrong public key, the intended recipient cannot open the file."""
+    blob = hybrid.encrypt_for_recipients(PLAINTEXT, [eve.public_key()])
+    with pytest.raises(IntegrityError):
+        hybrid.decrypt_as_recipient(blob, alice)
+
 # Required test 5
 def test_removing_recipient_entry_breaks_access(shared, alice, bob):
     bob_kid = keys.key_id(bob.public_key())

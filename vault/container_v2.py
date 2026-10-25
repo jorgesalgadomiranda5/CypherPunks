@@ -111,6 +111,8 @@ def unpack(data: bytes) -> ContainerV2:
         header = _header_from_dict(json.loads(header_json.decode("utf-8")))
     except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
         raise ContainerFormatError("Malformed header") from exc
+    if serialize_header(header) != header_json:
+        raise ContainerFormatError("Header is not in canonical form")
 
     return ContainerV2(aad=aad, header_json=header_json, header=header,
                        nonce=nonce, ciphertext_with_tag=data[offset:])
@@ -122,8 +124,12 @@ def find_recipient(header: Header, kid: str) -> RecipientEntry | None:
 
 
 def _header_from_dict(raw: dict) -> Header:
+    if set(raw) != {"version", "algorithms", "metadata", "recipients"}:
+        raise ValueError("Unexpected header fields")
     recipients = []
     for item in raw["recipients"]:
+        if set(item) != {"kid", "encrypted_key"}:
+            raise ValueError("Unexpected recipient fields")
         recipients.append(RecipientEntry(item["kid"], _b64d(item["encrypted_key"])))
     header = Header(recipients=recipients, metadata=raw["metadata"],
                     algorithms=raw["algorithms"], version=raw["version"])

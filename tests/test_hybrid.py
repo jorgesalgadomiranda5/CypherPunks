@@ -43,3 +43,14 @@ def test_private_key_roundtrip_with_passphrase(tmp_path, alice):
     # A wrong password must be rejected.
     with pytest.raises(KeyManagementError):
         keys.load_private_key(path, b"wrong")
+
+
+def test_weak_rsa_key_rejected():
+    with pytest.raises(KeyManagementError):
+        keys.generate_keypair(2048)
+
+
+def test_wrap_only_accepts_32_byte_keys(alice):
+    with pytest.raises(VaultError):
+        keywrap.wrap_file_key(alice.public_key(), PLAINTEXT[:200])
+

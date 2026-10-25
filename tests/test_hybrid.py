@@ -1,8 +1,10 @@
 """D3 tests: hybrid encryption, multi-recipient sharing and tampering."""
+import json
+
 import pytest
 
-from vault import keys, keywrap
-from vault.exceptions import KeyManagementError, VaultError
+from vault import container_v2, crypto_core, hybrid, keys, keywrap
+from vault.exceptions import IntegrityError, KeyManagementError, VaultError
 
 PLAINTEXT = b"%PDF-1.7\n" + b"contenido confidencial " * 2000
 
@@ -54,3 +56,43 @@ def test_wrap_only_accepts_32_byte_keys(alice):
     with pytest.raises(VaultError):
         keywrap.wrap_file_key(alice.public_key(), PLAINTEXT[:200])
 
+
+# --- Hybrid encryption ------------------------------------------------------
+@pytest.fixture
+def shared(alice, bob):
+    return hybrid.encrypt_for_recipients(PLAINTEXT, [alice.public_key(), bob.public_key()])
+
+
+def _rewrite_header(blob: bytes, mutate) -> bytes:
+    """Attacker helper: edit the header JSON and re-pack it (keeps nonce, ciphertext and tag)."""
+    parts = container_v2.unpack(blob)
+    header = json.loads(parts.header_json)
+    mutate(header)
+    new_json = crypto_core.canonicalize_metadata(header)
+    return container_v2.pack(new_json, parts.nonce, parts.ciphertext_with_tag)
+
+
+# Required test 1
+def test_two_recipients_can_both_decrypt(shared, alice, bob):
+    assert hybrid.decrypt_as_recipient(shared, alice) == PLAINTEXT
+    assert hybrid.decrypt_as_recipient(shared, bob) == PLAINTEXT
+
+
+# Required test 2
+def test_unauthorized_user_cannot_decrypt(shared, eve):
+    with pytest.raises(IntegrityError):
+        hybrid.decrypt_as_recipient(shared, eve)
+
+
+# Required test 5
+def test_removing_recipient_entry_breaks_access(shared, alice, bob):
+    bob_kid = keys.key_id(bob.public_key())
+
+    def drop_bob(header):
+        header["recipients"] = [r for r in header["recipients"] if r["kid"] != bob_kid]
+
+    tampered = _rewrite_header(shared, drop_bob)
+    with pytest.raises(IntegrityError):
+        hybrid.decrypt_as_recipient(tampered, bob)
+    with pytest.raises(IntegrityError):  # AAD changed, so Alice fails too
+        hybrid.decrypt_as_recipient(tampered, alice)

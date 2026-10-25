@@ -1,5 +1,7 @@
 
 """Hybrid encryption (D3): one AES-GCM ciphertext, one wrapped file key per recipient."""
+import time
+import uuid
 
 from cryptography.hazmat.primitives.asymmetric import rsa
 
@@ -13,13 +15,15 @@ def encrypt_for_recipients(plaintext: bytes, recipient_keys: list[rsa.RSAPublicK
     if not recipient_keys:
         raise VaultError("At least one recipient is required")
     kids = [key_id(pk) for pk in recipient_keys]
+    if len(set(kids)) != len(kids):
+        raise VaultError("The same public key was given twice")
 
     file_key = crypto_core.generate_key()
     entries = [
         container_v2.RecipientEntry(kid, keywrap.wrap_file_key(pk, file_key))
         for kid, pk in zip(kids, recipient_keys)
     ]
-    metadata = {}
+    metadata = {"file_id": str(uuid.uuid4()), "created_at": int(time.time())}
 
     header_json = container_v2.serialize_header(
         container_v2.Header(recipients=entries, metadata=metadata)

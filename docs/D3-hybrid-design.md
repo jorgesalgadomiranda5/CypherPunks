@@ -28,6 +28,33 @@ The file itself is encrypted once with AES-256-GCM through `crypto_core.encrypt(
 
 Each recipient has a different key pair, so the same file key is wrapped separately with each recipient's public key. Adding a recipient costs one RSA-OAEP block (384 bytes), not a second copy of the file, and no recipient needs anyone else's private key. OAEP is randomized, so even the same key wrapped twice for the same person gives different bytes.
 
+## 3. Container format (`SDV2`)
+
+```
++-------------+------------------+---------------+------------+---------------------------+
+| magic (4 B) | header_len (4 B) | header (JSON) | nonce (12) | ciphertext || tag (16 B)  |
+|   "SDV2"    |   uint32 BE      |               |            |                           |
++-------------+------------------+---------------+------------+---------------------------+
+|<---------------- AAD (magic + length + header) ->|
+```
+
+It keeps the SDV1 shape (header as AAD, nonce outside it, tag at the end), so the different magic is the only thing a reader needs to tell them apart. The header is canonical JSON:
+
+```json
+{"algorithms":{"aead":"AES-256-GCM","key_id":"SHA256-SPKI","key_wrap":"RSA-OAEP-SHA256"},
+ "metadata":{"created_at":1792900000,"file_id":"<uuid4>"},
+ "recipients":[{"encrypted_key":"<base64, 384 bytes>","kid":"<64 hex>"}, ...],
+ "version":"2.0"}
+```
+
+Recipients are sorted by key ID so the same set always produces the same bytes. The parser rejects unknown fields, unsupported versions or algorithms, zero or more than 64 recipients, duplicate or malformed key IDs, and any header that is not in canonical form. The original file name is **not** stored (unlike SDV1); `open` restores it from the container name (`report.pdf.sdv` → `report.pdf`). This closes the SR-07 gap noted in D2 for shared files.
+
+## 4. Security decisions
+
+### What happens if an attacker modifies the recipient list?
+
+The whole header, including every key ID and wrapped key, is the AEAD associated data. Adding, removing, reordering or swapping entries changes the AAD, so tag verification fails for **every** recipient and no plaintext is released. Changing an algorithm identifier is rejected by the parser before any decryption, so a downgrade is not possible.
+
 ## References
 
 [1] K. Moriarty, B. Kaliski, J. Jonsson and A. Rusch, "PKCS #1: RSA Cryptography Specifications Version 2.2," RFC 8017, IETF, 2016.

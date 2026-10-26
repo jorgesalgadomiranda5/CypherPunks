@@ -71,6 +71,19 @@ If the sender wraps the file key with the wrong public key, only the holder of t
 | Changes an algorithm identifier | IntegrityError (rejected by the parser) |
 | Flips bits in the ciphertext or truncates the file | IntegrityError, nothing written |
 
+## 5. Tests
+
+Run with `python -m pytest -v` (`tests/test_hybrid.py`).
+
+| Requirement | Tests |
+| --- | --- |
+| File shared with 2 users, both can decrypt | `test_two_recipients_can_both_decrypt`, `test_cli_share_open_and_recipients` |
+| Unauthorized user cannot decrypt | `test_unauthorized_user_cannot_decrypt` |
+| Tampered recipient list fails | `test_tampered_recipient_list_fails`, `test_swapped_identities_fail` |
+| Wrong private key fails | `test_wrong_private_key_fails`, `test_wrong_public_key_at_encryption_locks_out_intended_recipient` |
+| Removing a recipient entry breaks access | `test_removing_recipient_entry_breaks_access` |
+| Supporting checks | downgrade, bit-flip, truncation, duplicate recipients, key ID determinism, weak keys, passphrase round-trip |
+
 ## References
 
 [1] K. Moriarty, B. Kaliski, J. Jonsson and A. Rusch, "PKCS #1: RSA Cryptography Specifications Version 2.2," RFC 8017, IETF, 2016.

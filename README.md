@@ -28,3 +28,20 @@ python -m pytest -v
 ```
 
 ## D3: Hybrid Encryption (multi-recipient sharing)
+
+A file is encrypted **once** with AES-256-GCM (the D2 core) under a fresh file key, and that key is wrapped with **RSA-OAEP** for each recipient's public key. Only the listed recipients can open the shared `.sdv` (format `SDV2`); the whole recipient list is authenticated as AAD, so adding, removing or swapping recipients is detected.
+
+Full design and security decisions: [`docs/D3-hybrid-design.md`](docs/D3-hybrid-design.md)
+
+### Usage
+
+```bash
+python -m vault keygen alice -d keys                  # -> keys/alice.key.pem (passphrase) + keys/alice.pub.pem
+python -m vault keygen bob -d keys
+python -m vault share report.pdf -r keys/alice.pub.pem -r keys/bob.pub.pem   # -> report.pdf.sdv
+python -m vault recipients report.pdf.sdv             # key IDs allowed to open it
+python -m vault open report.pdf.sdv -i keys/bob.key.pem -o report-bob.pdf
+```
+
+Private keys are always stored encrypted with a passphrase. Never commit `*.pem` files.
+

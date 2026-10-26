@@ -51,6 +51,10 @@ Recipients are sorted by key ID so the same set always produces the same bytes. 
 
 ## 4. Security decisions
 
+### How do recipients identify their key?
+
+Each entry carries a key ID: SHA-256 over the DER `SubjectPublicKeyInfo` of the recipient's public key, in lowercase hex. The recipient computes the ID of their own public key and looks for exactly one matching entry. The mapping is deterministic (same key, same ID, regardless of PEM line breaks), duplicate IDs are rejected when encrypting and when parsing, and the ID reveals nothing about the private key.
+
 ### What happens if an attacker modifies the recipient list?
 
 The whole header, including every key ID and wrapped key, is the AEAD associated data. Adding, removing, reordering or swapping entries changes the AAD, so tag verification fails for **every** recipient and no plaintext is released. Changing an algorithm identifier is rejected by the parser before any decryption, so a downgrade is not possible.

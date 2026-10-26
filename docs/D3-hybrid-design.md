@@ -59,6 +59,18 @@ Each entry carries a key ID: SHA-256 over the DER `SubjectPublicKeyInfo` of the 
 
 The whole header, including every key ID and wrapped key, is the AEAD associated data. Adding, removing, reordering or swapping entries changes the AAD, so tag verification fails for **every** recipient and no plaintext is released. Changing an algorithm identifier is rejected by the parser before any decryption, so a downgrade is not possible.
 
+### What happens if the public key is wrong?
+
+If the sender wraps the file key with the wrong public key, only the holder of the matching private key could unwrap it; the intended recipient finds no entry with their key ID and cannot open the file. If a recipient uses the wrong private key, RSA-OAEP unwrapping fails. In every case the user gets the same generic IntegrityError ("authentication failed") and nothing is written. Public keys must therefore come from a trusted source (the Secure Address Book in D1); authenticating them is out of scope for D3.
+
+| Attacker action | Result |
+| --- | --- |
+| Opens the file without being a recipient | IntegrityError, nothing written |
+| Adds their own entry to the recipient list | IntegrityError for everyone |
+| Removes or swaps recipient entries | IntegrityError for everyone |
+| Changes an algorithm identifier | IntegrityError (rejected by the parser) |
+| Flips bits in the ciphertext or truncates the file | IntegrityError, nothing written |
+
 ## References
 
 [1] K. Moriarty, B. Kaliski, J. Jonsson and A. Rusch, "PKCS #1: RSA Cryptography Specifications Version 2.2," RFC 8017, IETF, 2016.

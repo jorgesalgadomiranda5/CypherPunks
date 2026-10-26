@@ -7,3 +7,7 @@ venv/
 # Never commit keys or encrypted test output
 *.key
 *.sdv
+
+#D3 key pairs and demo output
+*.pem
+demo/

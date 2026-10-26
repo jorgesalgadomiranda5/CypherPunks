@@ -1,3 +1,3 @@
-"""Secure Digital Document Vault - symmetric encryption module (D2)."""
+"""Secure Digital Document Vault - symmetric (D2) and hybrid (D3) encryption."""
 
-__version__ = "1.0"
+__version__ = "2.0"

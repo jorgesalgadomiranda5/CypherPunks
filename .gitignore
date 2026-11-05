@@ -11,3 +11,4 @@ venv/
 #D3 key pairs and demo output
 *.pem
 demo/
+demo-live/

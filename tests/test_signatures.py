@@ -45,3 +45,9 @@ def test_modified_ciphertext_rejected(signed, alice, bob, no_decryption):
     tampered[-SIGNATURE_SIZE - 40] ^= 0x01  # inside the ciphertext
     with pytest.raises(IntegrityError):
         hybrid.verify_and_decrypt(bytes(tampered), bob, alice.public_key())
+
+# Required test D
+def test_wrong_public_key_rejected(signed, eve, bob, no_decryption):
+    with pytest.raises(IntegrityError):
+        hybrid.verify_and_decrypt(signed, bob, eve.public_key())
+

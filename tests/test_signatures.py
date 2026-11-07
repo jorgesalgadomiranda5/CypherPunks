@@ -37,3 +37,11 @@ def no_decryption(monkeypatch):
 # Required test A
 def test_valid_signature_accepted(signed, alice, bob):
     assert hybrid.verify_and_decrypt(signed, bob, alice.public_key()) == PLAINTEXT
+
+
+# Required test B
+def test_modified_ciphertext_rejected(signed, alice, bob, no_decryption):
+    tampered = bytearray(signed)
+    tampered[-SIGNATURE_SIZE - 40] ^= 0x01  # inside the ciphertext
+    with pytest.raises(IntegrityError):
+        hybrid.verify_and_decrypt(bytes(tampered), bob, alice.public_key())

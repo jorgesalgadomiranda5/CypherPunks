@@ -97,11 +97,11 @@ def public_key_from_pem(data: bytes) -> rsa.RSAPublicKey:
 def key_id(public_key: rsa.RSAPublicKey | ed25519.Ed25519PublicKey) -> str:
     """Key ID = SHA-256 over the DER SubjectPublicKeyInfo, lowercase hex (64 chars).
 
-       The same rule identifies recipients (RSA) and signers (Ed25519).
+    The same rule identifies recipients (RSA) and signers (Ed25519).
     """
     der = public_key.public_bytes(
-	encoding=serialization.Encoding.DER,
-    	format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        encoding=serialization.Encoding.DER,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
     )
     return hashlib.sha256(der).hexdigest()
 

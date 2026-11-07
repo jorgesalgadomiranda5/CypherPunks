@@ -3,8 +3,8 @@
     python -m vault encrypt <file> [-o out.sdv] [-k out.key]
     python -m vault decrypt <file.sdv> -k <file.key> [-o out_file]
     python -m vault keygen <name> [-d folder]
-    python -m vault share <file> -r alice.pub.pem -r bob.pub.pem [-o out.sdv]
-    python -m vault open <file.sdv> -i bob.key.pem [-o out_file]
+    python -m vault share <file> -r alice.pub.pem -r bob.pub.pem -s me.sign.key.pem [-o out.sdv]
+    python -m vault open <file.sdv> -i bob.key.pem --sender alice.sign.pub.pem [-o out_file]
     python -m vault recipients <file.sdv>
 
 D2 note: the per-file key is saved as hex in a separate .key file so the
@@ -12,6 +12,8 @@ owner can decrypt later. Protecting that key (Key Store, password, public
 key wrapping) is the job of the next deliverables.
 D3 note: share/open never write the file key to disk. It is wrapped with each
 recipient's RSA public key and stored inside the container.
+D5 note: share always signs and open always verifies first, so unsigned
+containers are no longer accepted by open.
 """
 import argparse
 import getpass
@@ -95,7 +97,7 @@ def _cmd_recipients(args) -> None:
         print(kid)
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="vault", description="Secure Digital Document Vault (D2-D3)")
+    parser = argparse.ArgumentParser(prog="vault", description="Secure Digital Document Vault (D2-D5)")
     sub = parser.add_subparsers(dest="command", required=True)
 
     enc = sub.add_parser("encrypt", help="encrypt a file")
@@ -109,8 +111,8 @@ def build_parser() -> argparse.ArgumentParser:
     dec.add_argument("-o", "--output", help="output path (default: original name)")
     dec.add_argument("-f", "--force", action="store_true",
                      help="overwrite the output file if it already exists")
-    kg = sub.add_parser("keygen", help="create an RSA key pair for sharing (D3)")
-    kg.add_argument("name", help="writes <name>.key.pem and <name>.pub.pem")
+    kg = sub.add_parser("keygen", help="create RSA (sharing) and Ed25519 (signing) key pairs")
+    kg.add_argument("name", help="writes <name>.key.pem, <name>.pub.pem, <name>.sign.key.pem, <name>.sign.pub.pem")
     kg.add_argument("-d", "--dir", default=".", help="output folder (default: current folder)")
     sh = sub.add_parser("share", help="encrypt a file for one or more recipients (D3)")
     sh.add_argument("input")

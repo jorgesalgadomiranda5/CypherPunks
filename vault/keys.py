@@ -43,7 +43,7 @@ def load_signing_public_key(path: str | Path) -> ed25519.Ed25519PublicKey:
     return key
 
 
-def save_private_key(private_key: rsa.RSAPrivateKey, path: str | Path, passphrase: bytes) -> None:
+def save_private_key(private_key: rsa.RSAPrivateKey | ed25519.Ed25519PrivateKey, path: str | Path, passphrase: bytes) -> None:
     """Write the private key as PKCS#8 PEM, always encrypted with a passphrase."""
     if not passphrase:
         raise KeyManagementError("A passphrase is required to store a private key")
@@ -66,7 +66,7 @@ def load_private_key(path: str | Path, passphrase: bytes) -> rsa.RSAPrivateKey:
     return key
 
 
-def save_public_key(public_key: rsa.RSAPublicKey, path: str | Path) -> None:
+def save_public_key(public_key: rsa.RSAPublicKey | ed25519.Ed25519PublicKey, path: str | Path) -> None:
     Path(path).write_bytes(public_key_to_pem(public_key))
 
 
@@ -78,7 +78,7 @@ def load_public_key(path: str | Path) -> rsa.RSAPublicKey:
     return public_key_from_pem(data)
 
 
-def public_key_to_pem(public_key: rsa.RSAPublicKey) -> bytes:
+def public_key_to_pem(public_key: rsa.RSAPublicKey | ed25519.Ed25519PublicKey) -> bytes:
     return public_key.public_bytes(
         encoding=serialization.Encoding.PEM,
         format=serialization.PublicFormat.SubjectPublicKeyInfo,
@@ -94,9 +94,12 @@ def public_key_from_pem(data: bytes) -> rsa.RSAPublicKey:
     return key
 
 
-def key_id(public_key: rsa.RSAPublicKey) -> str:
-    """Key ID = SHA-256 over the DER SubjectPublicKeyInfo, lowercase hex (64 chars)."""
-    der = public_key.public_bytes(
+def key_id(public_key: rsa.RSAPublicKey | ed25519.Ed25519PublicKey) -> str:
+    """Key ID = SHA-256 over the DER SubjectPublicKeyInfo, lowercase hex (64 chars).
+
+	The same rule identifies recipients (RSA) and signers (Ed25519).
+    """
+    	der = public_key.public_bytes(
         encoding=serialization.Encoding.DER,
         format=serialization.PublicFormat.SubjectPublicKeyInfo,
     )

@@ -2,14 +2,18 @@
 import time
 import uuid
 
-from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.asymmetric import ed25519, rsa
 
-from vault import container_v2, crypto_core, keywrap
+from vault import container_v2, crypto_core, keywrap, signatures
 from vault.exceptions import ContainerFormatError, IntegrityError, VaultError
 from vault.keys import key_id
 
 
-def encrypt_for_recipients(plaintext: bytes, recipient_keys: list[rsa.RSAPublicKey]) -> bytes:
+def encrypt_for_recipients(
+    plaintext: bytes,
+    recipient_keys: list[rsa.RSAPublicKey],
+    signer_id: str | None = None,
+) -> bytes:
     """Encrypt once with a fresh file key; wrap that key for every recipient."""
     if not recipient_keys:
         raise VaultError("At least one recipient is required")
@@ -23,6 +27,9 @@ def encrypt_for_recipients(plaintext: bytes, recipient_keys: list[rsa.RSAPublicK
         for kid, pk in zip(kids, recipient_keys)
     ]
     metadata = {"file_id": str(uuid.uuid4()), "created_at": int(time.time())}
+
+    if signer_id:
+        metadata["signer_id"] = signer_id
 
     header_json = container_v2.serialize_header(
         container_v2.Header(recipients=entries, metadata=metadata)
@@ -48,6 +55,35 @@ def decrypt_as_recipient(data: bytes, private_key: rsa.RSAPrivateKey) -> bytes:
         raise IntegrityError("Authentication failed")
     file_key = keywrap.unwrap_file_key(private_key, entry.encrypted_key)
     return crypto_core.decrypt(file_key, parts.nonce, parts.ciphertext_with_tag, parts.aad)
+
+
+def encrypt_and_sign(
+    plaintext: bytes,
+    recipient_keys: list[rsa.RSAPublicKey],
+    signing_key: ed25519.Ed25519PrivateKey,
+) -> bytes:
+    """Encrypt the package and append its Ed25519 signature."""
+    package = encrypt_for_recipients(
+        plaintext,
+        recipient_keys,
+        key_id(signing_key.public_key()),
+    )
+    return package + signatures.sign(signing_key, package)
+
+
+def verify_and_decrypt(
+    data: bytes,
+    private_key: rsa.RSAPrivateKey,
+    sender_key: ed25519.Ed25519PublicKey,
+) -> bytes:
+    """Verify first; only a package with a valid signature reaches decryption."""
+    package = data[:-signatures.SIGNATURE_SIZE_BYTES]
+    signatures.verify(
+        sender_key,
+        data[-signatures.SIGNATURE_SIZE_BYTES:],
+        package,
+    )
+    return decrypt_as_recipient(package, private_key)
 
 
 def list_recipients(data: bytes) -> list[str]:

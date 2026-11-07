@@ -46,6 +46,18 @@ def test_modified_ciphertext_rejected(signed, alice, bob, no_decryption):
     with pytest.raises(IntegrityError):
         hybrid.verify_and_decrypt(bytes(tampered), bob, alice.public_key())
 
+
+# Required test C
+def test_modified_metadata_rejected(signed, alice, bob, no_decryption):
+    parts = container_v2.unpack(signed[:-SIGNATURE_SIZE])
+    header = json.loads(parts.header_json)
+    header["metadata"]["created_at"] = 0
+    new_header = crypto_core.canonicalize_metadata(header)
+    tampered = container_v2.pack(new_header, parts.nonce, parts.ciphertext_with_tag) + signed[-SIGNATURE_SIZE:]
+    with pytest.raises(IntegrityError):
+        hybrid.verify_and_decrypt(tampered, bob, alice.public_key())
+
+
 # Required test D
 def test_wrong_public_key_rejected(signed, eve, bob, no_decryption):
     with pytest.raises(IntegrityError):

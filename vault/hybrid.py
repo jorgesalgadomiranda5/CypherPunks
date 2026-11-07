@@ -83,6 +83,8 @@ def verify_and_decrypt(
         data[-signatures.SIGNATURE_SIZE_BYTES:],
         package,
     )
+    if container_v2.unpack(package).header.metadata.get("signer_id") != key_id(sender_key):
+        raise IntegrityError("Authentication failed")
     return decrypt_as_recipient(package, private_key)
 
 

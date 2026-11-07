@@ -3,7 +3,7 @@ import hashlib
 from pathlib import Path
 
 from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.asymmetric import ed25519, rsa
 
 from vault.exceptions import KeyManagementError
 
@@ -16,6 +16,22 @@ def generate_keypair(key_size: int = RSA_KEY_SIZE) -> rsa.RSAPrivateKey:
     if key_size < MIN_RSA_KEY_SIZE:
         raise KeyManagementError(f"RSA keys must be at least {MIN_RSA_KEY_SIZE} bits")
     return rsa.generate_private_key(public_exponent=PUBLIC_EXPONENT, key_size=key_size)
+
+
+
+def generate_signing_keypair() -> ed25519.Ed25519PrivateKey:
+    """Ed25519 pair used only to sign. RSA pairs stay for key wrapping only."""
+    return ed25519.Ed25519PrivateKey.generate()
+
+
+def load_signing_private_key(path: str | Path, passphrase: bytes) -> ed25519.Ed25519PrivateKey:
+    try:
+        key = serialization.load_pem_private_key(Path(path).read_bytes(), password=passphrase)
+    except (OSError, ValueError, TypeError) as exc:
+        raise KeyManagementError("Could not load signing key (wrong passphrase or corrupt file)") from exc
+    if not isinstance(key, ed25519.Ed25519PrivateKey):
+        raise KeyManagementError("Only Ed25519 keys can be used for signatures")
+    return key
 
 
 def save_private_key(private_key: rsa.RSAPrivateKey, path: str | Path, passphrase: bytes) -> None:

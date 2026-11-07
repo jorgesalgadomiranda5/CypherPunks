@@ -59,8 +59,12 @@ def _cmd_keygen(args) -> None:
     if os.path.exists(private_path):
         raise VaultError(f"Key already exists: {private_path}")
     private_key = keys.generate_keypair()
-    keys.save_private_key(private_key, private_path, _ask_passphrase(confirm=True))
+    passphrase = _ask_passphrase(confirm=True)
+    keys.save_private_key(private_key, private_path, passphrase)
     keys.save_public_key(private_key.public_key(), public_path)
+    signing_key = keys.generate_signing_keypair()
+    keys.save_private_key(signing_key, os.path.join(args.dir, f"{args.name}.sign.key.pem"), passphrase)
+    keys.save_public_key(signing_key.public_key(), os.path.join(args.dir, f"{args.name}.sign.pub.pem"))
     print(f"Private key -> {private_path}  (never share it)")
     print(f"Public key  -> {public_path}")
     print(f"Key ID      -> {keys.key_id(private_key.public_key())}")

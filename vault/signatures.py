@@ -23,4 +23,5 @@
         try:
             public_key.verify(signature, compute_digest(data))
         except InvalidSignature:
-            raise IntegrityError("Invalid signature") from None
+            # Same message as every other failure: do not reveal which check failed.
+            raise IntegrityError("Authentication failed") from None

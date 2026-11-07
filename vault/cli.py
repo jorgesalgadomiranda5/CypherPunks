@@ -73,8 +73,9 @@ def _cmd_keygen(args) -> None:
 def _cmd_share(args) -> None:
     plaintext = _read_input(args.input)
     public_keys = [keys.load_public_key(path) for path in args.recipient]
-    out = args.output or args.input + ".sdv"
-    file_vault._atomic_write(out, hybrid.encrypt_for_recipients(plaintext, public_keys))
+    out = args.output or args.input + ".sdv"    
+    signing_key = keys.load_signing_private_key(args.sign_key, _ask_passphrase())
+    file_vault._atomic_write(out, hybrid.encrypt_and_sign(plaintext, public_keys, signing_key))
     print(f"Encrypted for {len(public_keys)} recipient(s) -> {out}")
 
 
@@ -84,7 +85,8 @@ def _cmd_open(args) -> None:
     if os.path.exists(out) and not args.force:
         raise VaultError(f"Output file already exists: {out}")
     private_key = keys.load_private_key(args.identity, _ask_passphrase())
-    file_vault._atomic_write(out, hybrid.decrypt_as_recipient(data, private_key))
+    sender_key = keys.load_signing_public_key(args.sender)
+    file_vault._atomic_write(out, hybrid.verify_and_decrypt(data, private_key, sender_key))
     print(f"Decrypted -> {out}")
 
 def _cmd_recipients(args) -> None:
@@ -115,12 +117,16 @@ def build_parser() -> argparse.ArgumentParser:
     sh.add_argument("-r", "--recipient", action="append", required=True,
                     metavar="PUB_PEM",
                     help="recipient public key; repeat once per recipient")
+    sh.add_argument("-s", "--sign-key", required=True, metavar="SIGN_KEY_PEM",
+                help="your Ed25519 private signing key")
     sh.add_argument("-o", "--output", help="container path (default: <input>.sdv)")
 
     op = sub.add_parser("open", help="decrypt a shared container with your private key (D3)")
     op.add_argument("input")
     op.add_argument("-i", "--identity", required=True, metavar="KEY_PEM",
                     help="your private key")
+    op.add_argument("--sender", required=True, metavar="SIGN_PUB_PEM",
+                    help="public signing key of the expected sender")
     op.add_argument("-o", "--output", help="output path (default: input without .sdv)")
     op.add_argument("-f", "--force", action="store_true",
                     help="overwrite the output file if it already exists")

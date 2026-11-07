@@ -18,7 +18,6 @@ def generate_keypair(key_size: int = RSA_KEY_SIZE) -> rsa.RSAPrivateKey:
     return rsa.generate_private_key(public_exponent=PUBLIC_EXPONENT, key_size=key_size)
 
 
-
 def generate_signing_keypair() -> ed25519.Ed25519PrivateKey:
     """Ed25519 pair used only to sign. RSA pairs stay for key wrapping only."""
     return ed25519.Ed25519PrivateKey.generate()
@@ -30,6 +29,16 @@ def load_signing_private_key(path: str | Path, passphrase: bytes) -> ed25519.Ed2
     except (OSError, ValueError, TypeError) as exc:
         raise KeyManagementError("Could not load signing key (wrong passphrase or corrupt file)") from exc
     if not isinstance(key, ed25519.Ed25519PrivateKey):
+        raise KeyManagementError("Only Ed25519 keys can be used for signatures")
+    return key
+
+
+def load_signing_public_key(path: str | Path) -> ed25519.Ed25519PublicKey:
+    try:
+        key = serialization.load_pem_public_key(Path(path).read_bytes())
+    except (OSError, ValueError) as exc:
+        raise KeyManagementError(f"Could not load public key: {path}") from exc
+    if not isinstance(key, ed25519.Ed25519PublicKey):
         raise KeyManagementError("Only Ed25519 keys can be used for signatures")
     return key
 

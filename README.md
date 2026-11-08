@@ -37,7 +37,7 @@ The original D1 diagram is kept in [docs/architecture_diagram.png](docs/architec
 | `vault/hybrid.py` | Encrypt once for many recipients and sign, verify and decrypt as one of them |
 | `vault/cli.py` | Command-line interface |
 | `vault/exceptions.py` | `VaultError`, `IntegrityError`, `ContainerFormatError`, `KeyManagementError` |
-| `tests/` | 67 unit tests |
+| `tests/` | 75 unit tests |
 | `docs/` | Design documents and architecture diagrams |
 
 ## Requirements
@@ -117,23 +117,25 @@ python -m vault open demo/tampered.sdv -i demo/bob.key.pem --sender demo/alice.s
 ## Tests
 
 ```bash
-The mapping from each D2 and D3 requirement to its tests is in the design documents.
+python -m pytest -v
+```
+
+| File | Tests | Covers |
+| --- | --- | --- |
+| `tests/test_aead.py` | 16 | AES-GCM round trip, wrong key, modified ciphertext / tag / nonce / metadata, nonce reuse leak |
+| `tests/test_container.py` | 8 | `SDV1` structure and validation |
+| `tests/test_file_vault.py` | 12 | File-level encryption, tampering, safe failure, no overwrite |
+| `tests/test_metadata.py` | 7 | Required fields, base name only, canonical form, strict parsing |
+| `tests/test_randomness.py` | 4 | 256-bit keys, 96-bit nonces, fresh keys, unique nonces |
+| `tests/test_cli.py` | 5 | D2 command-line flow, tampered input, key file permissions, no overwrite |
+| `tests/test_hybrid.py` | 18 | Two recipients, unauthorized user, tampered / swapped / removed recipients, wrong keys, downgrade, truncation |
+| `tests/test_signatures.py` | 5 | D5 required tests A to E |
+
+The mapping from each requirement to its tests is in the design documents.
 
 ## Known limitations
 
 - **Freshness (SR-05)**: a captured package can be replayed. `created_at` and `file_id` are signed, but nothing tracks them yet.
 - **Authentic public keys (SR-10)**: public keys are `.pub.pem` files the users trust; there is no certificate validation yet.
 - **`SDV1` file name**: the single-owner format keeps the original file name in the clear (authenticated, but visible). `SDV2` no longer stores it.
-```
-| `tests/test_metadata.py` | 7 | Required fields, base name only, canonical form, strict parsing |
-| `tests/test_randomness.py` | 4 | 256-bit keys, 96-bit nonces, fresh keys, unique nonces |
-| `tests/test_cli.py` | 5 | D2 command-line flow, tampered input, key file permissions, no overwrite |
-| `tests/test_hybrid.py` | 18 | Two recipients, unauthorized user, tampered / swapped / removed recipients, wrong keys, downgrade, truncation |
-
-
-| File | Tests | Covers |
-| --- | --- | --- |
-| `tests/test_aead.py` | 13 | AES-GCM round trip, wrong key, modified ciphertext / tag / nonce / metadata, nonce reuse leak |
-| `tests/test_container.py` | 8 | `SDV1` structure and validation |
-| `tests/test_file_vault.py` | 12 | File-level encryption, tampering, safe failure, no overwrite |
 

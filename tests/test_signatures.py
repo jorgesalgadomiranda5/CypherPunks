@@ -63,3 +63,8 @@ def test_wrong_public_key_rejected(signed, eve, bob, no_decryption):
     with pytest.raises(IntegrityError):
         hybrid.verify_and_decrypt(signed, bob, eve.public_key())
 
+
+# Required test E
+def test_signature_removed_rejected(signed, alice, bob, no_decryption):
+    with pytest.raises(IntegrityError):
+        hybrid.verify_and_decrypt(signed[:-SIGNATURE_SIZE], bob, alice.public_key())

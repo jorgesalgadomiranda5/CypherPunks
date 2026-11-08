@@ -22,6 +22,29 @@ We use Ed25519 (RFC 8032 [1], FIPS 186-5 [2]) through the `cryptography` library
 A signature scheme works on a short, fixed-size value, while our files have no size limit. `compute_digest` reduces the whole container to one SHA-256 digest, and that digest is what gets signed. This is safe because SHA-256 is collision resistant: an attacker cannot find different data with the same digest. Any changed byte gives a different digest and verification fails.
 
 
+### What data is signed
+
+The signature covers the complete SDV2 container: magic, header length, header (metadata, algorithms, recipients and signer ID), nonce, ciphertext and tag. This includes everything used as AAD. The only bytes left out are the signature itself.
+
+### Signature storage
+
+```
++-------------+------------------+---------------+------------+--------------------------+----------------+
+| magic (4 B) | header_len (4 B) | header (JSON) | nonce (12) | ciphertext || tag (16 B) | signature (64) |
++-------------+------------------+---------------+------------+--------------------------+----------------+
+|<--------------------------------- SDV2 container, covered by the signature ---------->|
+```
+
+The SDV2 format does not change. `metadata`, `recipients` and `signer_id` are in the header, `ciphertext` and `tag` keep the D2 layout, and `signature` is added at the end.
+
+### How the signer is identified
+
+`signer_id` is the SHA-256 fingerprint of the signer's public key in DER `SubjectPublicKeyInfo` form, in lowercase hex, the same rule as the D3 recipient key ID. It is stored in the header metadata. The recipient chooses the expected sender's public key, and the vault rejects the package if the ID does not match that key.
+
+### How the signature is encoded
+
+The signature uses the standard RFC 8032 encoding: 64 raw bytes, `R || S`.
+
 ## 4. Security decisions
 
 ### Why sign ciphertext and not plaintext?

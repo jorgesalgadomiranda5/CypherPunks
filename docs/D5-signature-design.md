@@ -30,3 +30,7 @@ Because the check has to happen before decryption. A signature over the cipherte
 
 An attacker could try to remove the signature and sign the same bytes as their own. The `signer_id` is inside the AAD, so changing it breaks the AEAD tag, and leaving it unchanged makes the package fail the signer check.
 
+
+### What happens if the signature is not verified first?
+
+The private key and the decryption code would run on data from an unknown source, which gives an attacker more ways to probe the system [3]. The AEAD check does not replace the signature either: every recipient holds the file key, so any of them could produce a new ciphertext with a valid tag and present it as coming from the sender. Only the signature stops that. The `no_decryption` test fixture makes tests B to E fail if a rejected package reaches key unwrapping or decryption (SR-06).

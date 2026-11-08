@@ -20,3 +20,13 @@ We use Ed25519 (RFC 8032 [1], FIPS 186-5 [2]) through the `cryptography` library
 
 ### Why hashing is required before signing
 A signature scheme works on a short, fixed-size value, while our files have no size limit. `compute_digest` reduces the whole container to one SHA-256 digest, and that digest is what gets signed. This is safe because SHA-256 is collision resistant: an attacker cannot find different data with the same digest. Any changed byte gives a different digest and verification fails.
+
+
+## 4. Security decisions
+
+### Why sign ciphertext and not plaintext?
+
+Because the check has to happen before decryption. A signature over the ciphertext can be verified with public information only, so a forged package is rejected without using a private key or running the decryption code on attacker input. It also binds the signature to this exact package, with its recipient list and metadata, so the same content cannot be reused in another context.
+
+An attacker could try to remove the signature and sign the same bytes as their own. The `signer_id` is inside the AAD, so changing it breaks the AEAD tag, and leaving it unchanged makes the package fail the signer check.
+

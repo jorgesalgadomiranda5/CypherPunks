@@ -56,4 +56,23 @@ An attacker could try to remove the signature and sign the same bytes as their o
 
 ### What happens if the signature is not verified first?
 
-The private key and the decryption code would run on data from an unknown source, which gives an attacker more ways to probe the system [3]. The AEAD check does not replace the signature either: every recipient holds the file key, so any of them could produce a new ciphertext with a valid tag and present it as coming from the sender. Only the signature stops that. The `no_decryption` test fixture makes tests B to E fail if a rejected package reaches key unwrapping or decryption (SR-06).
+The private key and the decryption code would run on data from an unknown source, which gives an attacker more ways to probe the system [3]. The AEAD check does not replace the signature either: every recipient holds the file key, so any of them could produce a new ciphertext with a valid tag and present it as coming from the sender. Only the signature stops that. The `no_decryption` test fixture makes tests B to E fail if a rejected package reaches key unwrapping or decryption (SR-### What happens if metadata is excluded?
+The signature would prove who produced the ciphertext but say nothing about its context. An attacker could edit the creation date, the algorithm identifiers or the recipient list, and the signature would still verify. The AEAD tag would catch some of this, but only after a recipient had used their private key. Signing the header rejects these changes first.
+
+## 5. Tests
+Run with `python -m pytest -v` (`tests/test_signatures.py`).
+| Requirement | Test |
+| --- | --- |
+| A. Valid signature, file accepted | `test_valid_signature_accepted` |
+| B. Modified ciphertext, rejected | `test_modified_ciphertext_rejected` |
+| C. Modified metadata, rejected | `test_modified_metadata_rejected` |
+| D. Wrong public key, rejected | `test_wrong_public_key_rejected` |
+| E. Signature removed, rejected | `test_signature_removed_rejected` |
+
+## References
+[1] S. Josefsson and I. Liusvaara, "Edwards-Curve Digital Signature Algorithm (EdDSA)," RFC 8032, IETF, 2017.
+[2] NIST, "Digital Signature Standard (DSS)," FIPS 186-5, 2023.
+[3] D. Bleichenbacher, "Chosen Ciphertext Attacks Against Protocols Based on the RSA Encryption Standard PKCS #1," CRYPTO '98, LNCS 1462, 1998.
+[4] Python Cryptographic Authority, "Ed25519 signing — cryptography documentation." [Online]. Available: https://cryptography.io/en/latest/hazmat/primitives/asymmetric/ed25519/
+
+

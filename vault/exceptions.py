@@ -25,6 +25,6 @@ class ContainerFormatError(VaultError):
 class KeyManagementError(VaultError):
     """A key pair could not be generated, loaded or used.
 
-    Covers a wrong passphrase, a corrupt PEM file, a non-RSA key and RSA keys
-    below the minimum size.
+    Covers a wrong passphrase, a corrupt PEM file, a key of the wrong type
+    (RSA for wrapping, Ed25519 for signing) and RSA keys below the minimum size.
     """

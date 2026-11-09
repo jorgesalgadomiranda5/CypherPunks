@@ -179,17 +179,21 @@ def test_cli_share_open_and_recipients(tmp_path, monkeypatch, capsys):
     src = tmp_path / "report.pdf"
     src.write_bytes(PLAINTEXT)
     sdv = tmp_path / "report.pdf.sdv"
-
+    
     assert cli.main(["share", str(src), "-r", str(tmp_path / "alice.pub.pem"),
-                     "-r", str(tmp_path / "bob.pub.pem")]) == 0
+                     "-r", str(tmp_path / "bob.pub.pem"),
+                     "-s", str(tmp_path / "alice.sign.key.pem")]) == 0
     capsys.readouterr()
     assert cli.main(["recipients", str(sdv)]) == 0
     assert len(capsys.readouterr().out.split()) == 2
 
-    out = tmp_path / "bob.pdf"
-    assert cli.main(["open", str(sdv), "-i", str(tmp_path / "bob.key.pem"), "-o", str(out)]) == 0
+    out = tmp_path / "bob.pdf"    
+    sender = str(tmp_path / "alice.sign.pub.pem")
+    assert cli.main(["open", str(sdv), "-i", str(tmp_path / "bob.key.pem"),
+                     "--sender", sender, "-o", str(out)]) == 0
     assert out.read_bytes() == PLAINTEXT
 
     denied = tmp_path / "eve.pdf"
-    assert cli.main(["open", str(sdv), "-i", str(tmp_path / "eve.key.pem"), "-o", str(denied)]) == 2
+    assert cli.main(["open", str(sdv), "-i", str(tmp_path / "eve.key.pem"),
+                     "--sender", sender, "-o", str(denied)]) == 2
     assert not denied.exists()

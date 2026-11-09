@@ -3,8 +3,8 @@
     python -m vault encrypt <file> [-o out.sdv] [-k out.key]
     python -m vault decrypt <file.sdv> -k <file.key> [-o out_file]
     python -m vault keygen <name> [-d folder]
-    python -m vault share <file> -r alice.pub.pem -r bob.pub.pem [-o out.sdv]
-    python -m vault open <file.sdv> -i bob.key.pem [-o out_file]
+    python -m vault share <file> -r alice.pub.pem -r bob.pub.pem -s me.sign.key.pem [-o out.sdv]
+    python -m vault open <file.sdv> -i bob.key.pem --sender alice.sign.pub.pem [-o out_file]
     python -m vault recipients <file.sdv>
 
 D2 note: the per-file key is saved as hex in a separate .key file so the
@@ -12,6 +12,8 @@ owner can decrypt later. Protecting that key (Key Store, password, public
 key wrapping) is the job of the next deliverables.
 D3 note: share/open never write the file key to disk. It is wrapped with each
 recipient's RSA public key and stored inside the container.
+D5 note: share always signs and open always verifies first, so unsigned
+containers are no longer accepted by open.
 """
 import argparse
 import getpass
@@ -59,8 +61,12 @@ def _cmd_keygen(args) -> None:
     if os.path.exists(private_path):
         raise VaultError(f"Key already exists: {private_path}")
     private_key = keys.generate_keypair()
-    keys.save_private_key(private_key, private_path, _ask_passphrase(confirm=True))
+    passphrase = _ask_passphrase(confirm=True)
+    keys.save_private_key(private_key, private_path, passphrase)
     keys.save_public_key(private_key.public_key(), public_path)
+    signing_key = keys.generate_signing_keypair()
+    keys.save_private_key(signing_key, os.path.join(args.dir, f"{args.name}.sign.key.pem"), passphrase)
+    keys.save_public_key(signing_key.public_key(), os.path.join(args.dir, f"{args.name}.sign.pub.pem"))
     print(f"Private key -> {private_path}  (never share it)")
     print(f"Public key  -> {public_path}")
     print(f"Key ID      -> {keys.key_id(private_key.public_key())}")
@@ -69,8 +75,9 @@ def _cmd_keygen(args) -> None:
 def _cmd_share(args) -> None:
     plaintext = _read_input(args.input)
     public_keys = [keys.load_public_key(path) for path in args.recipient]
-    out = args.output or args.input + ".sdv"
-    file_vault._atomic_write(out, hybrid.encrypt_for_recipients(plaintext, public_keys))
+    out = args.output or args.input + ".sdv"    
+    signing_key = keys.load_signing_private_key(args.sign_key, _ask_passphrase())
+    file_vault._atomic_write(out, hybrid.encrypt_and_sign(plaintext, public_keys, signing_key))
     print(f"Encrypted for {len(public_keys)} recipient(s) -> {out}")
 
 
@@ -80,7 +87,8 @@ def _cmd_open(args) -> None:
     if os.path.exists(out) and not args.force:
         raise VaultError(f"Output file already exists: {out}")
     private_key = keys.load_private_key(args.identity, _ask_passphrase())
-    file_vault._atomic_write(out, hybrid.decrypt_as_recipient(data, private_key))
+    sender_key = keys.load_signing_public_key(args.sender)
+    file_vault._atomic_write(out, hybrid.verify_and_decrypt(data, private_key, sender_key))
     print(f"Decrypted -> {out}")
 
 def _cmd_recipients(args) -> None:
@@ -89,7 +97,7 @@ def _cmd_recipients(args) -> None:
         print(kid)
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="vault", description="Secure Digital Document Vault (D2-D3)")
+    parser = argparse.ArgumentParser(prog="vault", description="Secure Digital Document Vault (D2-D5)")
     sub = parser.add_subparsers(dest="command", required=True)
 
     enc = sub.add_parser("encrypt", help="encrypt a file")
@@ -103,20 +111,24 @@ def build_parser() -> argparse.ArgumentParser:
     dec.add_argument("-o", "--output", help="output path (default: original name)")
     dec.add_argument("-f", "--force", action="store_true",
                      help="overwrite the output file if it already exists")
-    kg = sub.add_parser("keygen", help="create an RSA key pair for sharing (D3)")
-    kg.add_argument("name", help="writes <name>.key.pem and <name>.pub.pem")
+    kg = sub.add_parser("keygen", help="create RSA (sharing) and Ed25519 (signing) key pairs")
+    kg.add_argument("name", help="writes <name>.key.pem, <name>.pub.pem, <name>.sign.key.pem, <name>.sign.pub.pem")
     kg.add_argument("-d", "--dir", default=".", help="output folder (default: current folder)")
     sh = sub.add_parser("share", help="encrypt a file for one or more recipients (D3)")
     sh.add_argument("input")
     sh.add_argument("-r", "--recipient", action="append", required=True,
                     metavar="PUB_PEM",
                     help="recipient public key; repeat once per recipient")
+    sh.add_argument("-s", "--sign-key", required=True, metavar="SIGN_KEY_PEM",
+                help="your Ed25519 private signing key")
     sh.add_argument("-o", "--output", help="container path (default: <input>.sdv)")
 
     op = sub.add_parser("open", help="decrypt a shared container with your private key (D3)")
     op.add_argument("input")
     op.add_argument("-i", "--identity", required=True, metavar="KEY_PEM",
                     help="your private key")
+    op.add_argument("--sender", required=True, metavar="SIGN_PUB_PEM",
+                    help="public signing key of the expected sender")
     op.add_argument("-o", "--output", help="output path (default: input without .sdv)")
     op.add_argument("-f", "--force", action="store_true",
                     help="overwrite the output file if it already exists")

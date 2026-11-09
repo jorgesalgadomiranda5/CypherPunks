@@ -13,12 +13,13 @@ Two people who do not share a trusted network need to exchange a file that trave
 | D1 | Architecture and threat model | [docs/D1-architecture-threat-model.md](docs/D1-architecture-threat-model.md) |
 | D2 | Single-owner AEAD encryption (AES-256-GCM, container `SDV1`) | Implemented and tested |
 | D3 | Hybrid multi-recipient sharing (RSA-OAEP key wrapping, container `SDV2`) | Implemented and tested |
+| D5 | Digital signatures and sender authentication (Ed25519) | Implemented and tested |
 
 ## Architecture
 
 ![Architecture after D3: sender and recipient trusted environments, untrusted channel with the SDV2 Secure Package, attacker and non-recipient user, trust boundaries TB1–TB4 and data flows DF1–DF11](docs/architecture_diagram_d3.png)
 
-The sender's Vault generates a fresh file key, encrypts the file once with AES-256-GCM and wraps that key with RSA-OAEP for every recipient. The Secure Package crosses the untrusted zone, where an attacker can read, copy, modify, replay or delete it. Each recipient's Vault parses the header, finds its own key ID, unwraps the file key with its private key, verifies the tag and only then writes the file. Elements drawn in dashed grey (signing, signature and freshness checks, the sender's Key Store) belong to the D1 design and are planned for the signatures module.
+The sender's Vault generates a fresh file key, encrypts the file once with AES-256-GCM and wraps that key with RSA-OAEP for every recipient. The Secure Package crosses the untrusted zone, where an attacker can read, copy, modify, replay or delete it. Each recipient's Vault parses the header, finds its own key ID, unwraps the file key with its private key, verifies the tag and only then writes the file. The diagram shows the system at D3: since D5, signing and signature verification (drawn in dashed grey) are implemented. The freshness check is still planned.
 
 The original D1 diagram is kept in [docs/architecture_diagram.png](docs/architecture_diagram.png).
 
@@ -29,13 +30,14 @@ The original D1 diagram is kept in [docs/architecture_diagram.png](docs/architec
 | `vault/crypto_core.py` | Key and nonce generation, canonical metadata, AES-256-GCM encrypt / decrypt |
 | `vault/container.py` | `SDV1` single-owner container: pack, unpack, structural validation |
 | `vault/file_vault.py` | File-level API for D2, atomic writes |
-| `vault/keys.py` | RSA-3072 key pairs, passphrase-protected PEM storage, key IDs |
+| `vault/keys.py` | RSA-3072 and Ed25519 key pairs, passphrase-protected PEM storage, key IDs |
 | `vault/keywrap.py` | Wrap / unwrap the 32-byte file key with RSA-OAEP-SHA256 |
 | `vault/container_v2.py` | `SDV2` multi-recipient container, strict header validation, AAD |
-| `vault/hybrid.py` | Encrypt once for many recipients, decrypt as one of them |
+| `vault/signatures.py` | Hash, sign and verify with Ed25519 |
+| `vault/hybrid.py` | Encrypt once for many recipients and sign, verify and decrypt as one of them |
 | `vault/cli.py` | Command-line interface |
 | `vault/exceptions.py` | `VaultError`, `IntegrityError`, `ContainerFormatError`, `KeyManagementError` |
-| `tests/` | 67 unit tests |
+| `tests/` | 75 unit tests |
 | `docs/` | Design documents and architecture diagrams |
 
 ## Requirements
@@ -70,12 +72,18 @@ A file is encrypted **once** with AES-256-GCM (the D2 core) under a fresh file k
 
 Full design and security decisions: [`docs/D3-hybrid-design.md`](docs/D3-hybrid-design.md)
 
+## D5: Signatures and authentication
+
+Every shared package is signed with the sender's **Ed25519** key. The signature covers a SHA-256 digest of the complete container, and `open` verifies it before using any secret key.
+
+Full design and security decisions: [`docs/D5-signature-design.md`](docs/D5-signature-design.md)
+
 ```bash
-python -m vault keygen alice -d keys                  # -> keys/alice.key.pem (passphrase) + keys/alice.pub.pem
+python -m vault keygen alice -d keys      # RSA pair + signing pair (alice.sign.key.pem, alice.sign.pub.pem)
 python -m vault keygen bob -d keys
-python -m vault share report.pdf -r keys/alice.pub.pem -r keys/bob.pub.pem   # -> report.pdf.sdv
+python -m vault share report.pdf -r keys/alice.pub.pem -r keys/bob.pub.pem -s keys/alice.sign.key.pem   # -> report.pdf.sdv
 python -m vault recipients report.pdf.sdv             # key IDs allowed to open it
-python -m vault open report.pdf.sdv -i keys/bob.key.pem -o report-bob.pdf
+python -m vault open report.pdf.sdv -i keys/bob.key.pem --sender keys/alice.sign.pub.pem -o report-bob.pdf
 ```
 
 Private keys are always stored encrypted with a passphrase. Never commit `*.pem` files.
@@ -92,16 +100,16 @@ python -m vault keygen eve -d demo
 
 | # | Scenario | Command | Expected result |
 | --- | --- | --- | --- |
-| 1 | Valid encryption for Alice and Bob | `python -m vault share demo/reporte.pdf -r demo/alice.pub.pem -r demo/bob.pub.pem -o demo/shared.sdv` | Container written; `python -m vault recipients demo/shared.sdv` lists two key IDs |
-| 2 | Shared file, recipient decrypts | `python -m vault open demo/shared.sdv -i demo/bob.key.pem -o demo/bob-out.pdf` | `bob-out.pdf` identical to the original |
-| 3 | Non-recipient cannot decrypt | `python -m vault open demo/shared.sdv -i demo/eve.key.pem -o demo/eve-out.pdf` | `ERROR: authentication failed`, no file written |
+| 1 | Valid encryption for Alice and Bob | `python -m vault share demo/reporte.pdf -r demo/alice.pub.pem -r demo/bob.pub.pem -s demo/alice.sign.key.pem -o demo/shared.sdv` | Container written; `python -m vault recipients demo/shared.sdv` lists two key IDs |
+| 2 | Shared file, recipient decrypts | `python -m vault open demo/shared.sdv -i demo/bob.key.pem --sender demo/alice.sign.pub.pem -o demo/bob-out.pdf` | `bob-out.pdf` identical to the original |
+| 3 | Non-recipient cannot decrypt | `python -m vault open demo/shared.sdv -i demo/eve.key.pem --sender demo/alice.sign.pub.pem -o demo/eve-out.pdf` | `ERROR: authentication failed`, no file written |
 | 4 | Modified file fails | see below | `ERROR: authentication failed`, no file written |
 
 Scenario 4 flips the last byte of the container and tries to open the copy:
 
 ```bash
 python -c "d=bytearray(open('demo/shared.sdv','rb').read()); d[-1]^=1; open('demo/tampered.sdv','wb').write(d)"
-python -m vault open demo/tampered.sdv -i demo/bob.key.pem -o demo/bob-tampered.pdf
+python -m vault open demo/tampered.sdv -i demo/bob.key.pem --sender demo/alice.sign.pub.pem -o demo/bob-tampered.pdf
 ```
 
 `open` refuses to overwrite an existing output, so delete old outputs before running the demo again.
@@ -109,24 +117,25 @@ python -m vault open demo/tampered.sdv -i demo/bob.key.pem -o demo/bob-tampered.
 ## Tests
 
 ```bash
-The mapping from each D2 and D3 requirement to its tests is in the design documents.
-
-## Known limitations
-
-- **Sender authenticity (SR-04)** is not implemented yet: anyone with a recipient's public key can build a valid package for them. Digital signatures will close this.
-- **Freshness (SR-05)**: a captured package can be replayed. Planned together with signatures.
-- **Authentic public keys (SR-10)**: public keys are `.pub.pem` files the users trust; there is no certificate validation yet.
-- **`SDV1` file name**: the single-owner format keeps the original file name in the clear (authenticated, but visible). `SDV2` no longer stores it.
+python -m pytest -v
 ```
+
+| File | Tests | Covers |
+| --- | --- | --- |
+| `tests/test_aead.py` | 16 | AES-GCM round trip, wrong key, modified ciphertext / tag / nonce / metadata, nonce reuse leak |
+| `tests/test_container.py` | 8 | `SDV1` structure and validation |
+| `tests/test_file_vault.py` | 12 | File-level encryption, tampering, safe failure, no overwrite |
 | `tests/test_metadata.py` | 7 | Required fields, base name only, canonical form, strict parsing |
 | `tests/test_randomness.py` | 4 | 256-bit keys, 96-bit nonces, fresh keys, unique nonces |
 | `tests/test_cli.py` | 5 | D2 command-line flow, tampered input, key file permissions, no overwrite |
 | `tests/test_hybrid.py` | 18 | Two recipients, unauthorized user, tampered / swapped / removed recipients, wrong keys, downgrade, truncation |
+| `tests/test_signatures.py` | 5 | D5 required tests A to E |
 
+The mapping from each requirement to its tests is in the design documents.
 
-| File | Tests | Covers |
-| --- | --- | --- |
-| `tests/test_aead.py` | 13 | AES-GCM round trip, wrong key, modified ciphertext / tag / nonce / metadata, nonce reuse leak |
-| `tests/test_container.py` | 8 | `SDV1` structure and validation |
-| `tests/test_file_vault.py` | 12 | File-level encryption, tampering, safe failure, no overwrite |
+## Known limitations
+
+- **Freshness (SR-05)**: a captured package can be replayed. `created_at` and `file_id` are signed, but nothing tracks them yet.
+- **Authentic public keys (SR-10)**: public keys are `.pub.pem` files the users trust; there is no certificate validation yet.
+- **`SDV1` file name**: the single-owner format keeps the original file name in the clear (authenticated, but visible). `SDV2` no longer stores it.
 

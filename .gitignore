@@ -12,3 +12,9 @@ venv/
 *.pem
 demo/
 demo-live/
+
+
+# D6 keystores and their backups
+keystore/
+backups/
+*.key.json

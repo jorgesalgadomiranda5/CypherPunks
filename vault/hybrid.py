@@ -2,7 +2,7 @@
 import time
 import uuid
 
-from cryptography.hazmat.primitives.asymmetric import ed25519, rsa
+from cryptography.hazmat.primitives.asymmetric import ed25519, x25519
 
 from vault import container_v2, crypto_core, keywrap, signatures
 from vault.exceptions import ContainerFormatError, IntegrityError, VaultError
@@ -11,7 +11,7 @@ from vault.keys import key_id
 
 def encrypt_for_recipients(
     plaintext: bytes,
-    recipient_keys: list[rsa.RSAPublicKey],
+    recipient_keys: list[x25519.X25519PublicKey],
     signer_id: str | None = None,
 ) -> bytes:
     """Encrypt once with a fresh file key; wrap that key for every recipient."""
@@ -38,7 +38,7 @@ def encrypt_for_recipients(
     nonce, ciphertext_with_tag = crypto_core.encrypt(file_key, plaintext, aad)
     return container_v2.pack(header_json, nonce, ciphertext_with_tag)
 
-def decrypt_as_recipient(data: bytes, private_key: rsa.RSAPrivateKey) -> bytes:
+def decrypt_as_recipient(data: bytes, private_key: x25519.X25519PrivateKey) -> bytes:
     """Find our entry by key ID, unwrap the file key and decrypt.
 
     Every failure (malformed container, not a recipient, wrong key, tampering)
@@ -59,7 +59,7 @@ def decrypt_as_recipient(data: bytes, private_key: rsa.RSAPrivateKey) -> bytes:
 
 def encrypt_and_sign(
     plaintext: bytes,
-    recipient_keys: list[rsa.RSAPublicKey],
+    recipient_keys: list[x25519.X25519PublicKey],
     signing_key: ed25519.Ed25519PrivateKey,
 ) -> bytes:
     """Encrypt the package and append its Ed25519 signature."""
@@ -73,7 +73,7 @@ def encrypt_and_sign(
 
 def verify_and_decrypt(
     data: bytes,
-    private_key: rsa.RSAPrivateKey,
+    private_key: x25519.X25519PrivateKey,
     sender_key: ed25519.Ed25519PublicKey,
 ) -> bytes:
     """Verify first; only a package with a valid signature reaches decryption."""

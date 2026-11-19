@@ -26,5 +26,5 @@ class KeyManagementError(VaultError):
     """A key pair could not be generated, loaded or used.
 
     Covers a wrong keystore password, a modified or corrupt keystore, a key used
-    for the wrong job (RSA wraps, Ed25519 signs) and RSA keys below the minimum size.
+    for the wrong job (X25519 wraps, Ed25519 signs) and unsupported key types.
     """

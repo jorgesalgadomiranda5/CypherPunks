@@ -13,7 +13,7 @@ D2 note: the per-file key is saved as hex in a separate .key file so the
 owner can decrypt later. Protecting that key (Key Store, password, public
 key wrapping) is the job of the next deliverables.
 D3 note: share/open never write the file key to disk. It is wrapped with each
-recipient's RSA public key and stored inside the container.
+recipient's X25519 public key (ECIES) and stored inside the container.
 D5 note: share always signs and open always verifies first, so unsigned
 containers are no longer accepted by open.
 D6 note: private keys live only in password-protected keystores (.key.json).
@@ -131,7 +131,7 @@ def build_parser() -> argparse.ArgumentParser:
     dec.add_argument("-o", "--output", help="output path (default: original name)")
     dec.add_argument("-f", "--force", action="store_true",
                      help="overwrite the output file if it already exists")
-    kg = sub.add_parser("keygen", help="create RSA (sharing) and Ed25519 (signing) key pairs")
+    kg = sub.add_parser("keygen", help="create X25519 (sharing) and Ed25519 (signing) key pairs")
     kg.add_argument("name", help="writes <name>.key.json, <name>.pub.pem, <name>.sign.key.json, <name>.sign.pub.pem") 
     kg.add_argument("-d", "--dir", default="keystore", help="output folder (default: keystore)")
     sh = sub.add_parser("share", help="encrypt a file for one or more recipients (D3)")

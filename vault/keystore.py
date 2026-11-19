@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 
 from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import ed25519, rsa
+from cryptography.hazmat.primitives.asymmetric import ed25519, x25519
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 
 from vault import crypto_core
@@ -26,9 +26,9 @@ KDF_PARAMETERS = {"algorithm": "scrypt", "n": 2**17, "r": 8, "p": 1, "length": 3
 SALT_SIZE_BYTES = 16
 MIN_PASSWORD_LENGTH = 12
 
-# One keystore holds one key with one job: RSA unwraps file keys, Ed25519 signs.
-KEY_TYPES = {"wrap": rsa.RSAPrivateKey, "sign": ed25519.Ed25519PrivateKey}
-PrivateKey = rsa.RSAPrivateKey | ed25519.Ed25519PrivateKey
+# One keystore holds one key with one job: X25519 unwraps file keys, Ed25519 signs.
+KEY_TYPES = {"wrap": x25519.X25519PrivateKey, "sign": ed25519.Ed25519PrivateKey}
+PrivateKey = x25519.X25519PrivateKey | ed25519.Ed25519PrivateKey
 
 def derive_key(password: bytes, salt: bytes) -> bytes:
     """Password + salt -> 256-bit key. scrypt is slow and memory-hard on purpose."""

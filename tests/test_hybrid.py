@@ -47,9 +47,37 @@ def test_private_key_roundtrip_with_password(tmp_path, alice):
         keystore.load_keystore(path, b"wrong password", "wrap")
 
 
-def test_weak_rsa_key_rejected():
-    with pytest.raises(KeyManagementError):
-        keys.generate_keypair(2048)
+def test_rsa_key_rejected():
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    pem = rsa.generate_private_key(public_exponent=65537, key_size=2048).public_key().public_bytes(
+        serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo
+    )
+    with pytest.raises(KeyManagementError, match="Only X25519"):
+        keys.public_key_from_pem(pem)
+
+
+def test_wrong_recipient_cannot_unwrap(alice, bob):
+    blob = keywrap.wrap_file_key(alice.public_key(), crypto_core.generate_key())
+    assert len(blob) == keywrap.WRAPPED_KEY_SIZE == 92
+    with pytest.raises(IntegrityError):
+        keywrap.unwrap_file_key(bob, blob)
+
+
+def test_tampered_ephemeral_key_fails(alice):
+    blob = bytearray(keywrap.wrap_file_key(alice.public_key(), crypto_core.generate_key()))
+    blob[0] ^= 0x01
+    with pytest.raises(IntegrityError):
+        keywrap.unwrap_file_key(alice, bytes(blob))
+
+
+def test_two_wraps_differ(alice):
+    file_key = crypto_core.generate_key()
+    a = keywrap.wrap_file_key(alice.public_key(), file_key)
+    b = keywrap.wrap_file_key(alice.public_key(), file_key)
+    assert a[:32] != b[:32] and a != b
+    assert keywrap.unwrap_file_key(alice, a) == keywrap.unwrap_file_key(alice, b) == file_key
 
 
 def test_wrap_only_accepts_32_byte_keys(alice):
@@ -148,7 +176,7 @@ def test_file_is_encrypted_once(shared):
 
 def test_algorithm_downgrade_fails(shared, alice):
     def downgrade(header):
-        header["algorithms"]["key_wrap"] = "RSA-PKCS1v15"
+        header["algorithms"]["key_wrap"] = "ECIES-P256-UNSUPPORTED"
 
     tampered = _rewrite_header(shared, downgrade)
     with pytest.raises(IntegrityError):

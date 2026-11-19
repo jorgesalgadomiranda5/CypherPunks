@@ -1,10 +1,10 @@
-"""Multi-recipient container format (.sdv, version 2) for D3.
+"""Multi-recipient container format (.sdv, version 3) for D3.
 
 Layout (all integers big-endian), same shape as SDV1 so both readers stay simple:
 
     +-------------+------------------+---------------+------------+--------------------------+
     | magic (4 B) | header_len (4 B) | header (JSON) | nonce (12) | ciphertext || tag (16 B) |
-    |   "SDV2"    |   uint32 BE      |               |            |                          |
+    |   "SDV3"    |   uint32 BE      |               |            |                          |
     +-------------+------------------+---------------+------------+--------------------------+
     |<------------ AAD (magic + length + header) --->|
 
@@ -20,16 +20,17 @@ from dataclasses import dataclass, field
 
 from vault.crypto_core import NONCE_SIZE_BYTES, TAG_SIZE_BYTES, canonicalize_metadata
 from vault.exceptions import ContainerFormatError
+from vault.keywrap import WRAP_ALGORITHM, WRAPPED_KEY_SIZE
 
-MAGIC = b"SDV2"
-FORMAT_VERSION = "2.0"
+MAGIC = b"SDV3"
+FORMAT_VERSION = "3.0"
 LENGTH_FORMAT = ">I"
 LENGTH_SIZE = struct.calcsize(LENGTH_FORMAT)
 MAX_HEADER_SIZE = 64 * 1024
 
 MAX_RECIPIENTS = 64  # Added for step 5!
 
-ALGORITHMS = {"aead": "AES-256-GCM", "key_wrap": "RSA-OAEP-SHA256", "key_id": "SHA256-SPKI"}
+ALGORITHMS = {"aead": "AES-256-GCM", "key_wrap": WRAP_ALGORITHM, "key_id": "SHA256-SPKI"}
 
 _KID_PATTERN = re.compile(r"^[0-9a-f]{64}$")  # Added for step 5!
 
@@ -158,6 +159,11 @@ def _validate_header(header: Header) -> None:
     for kid in kids:
         if not isinstance(kid, str) or not _KID_PATTERN.match(kid):
             raise ContainerFormatError("Invalid key ID")
+
+    # Every ECIES envelope has the same fixed size.
+    for r in header.recipients:
+        if len(r.encrypted_key) != WRAPPED_KEY_SIZE:
+            raise ContainerFormatError("Invalid wrapped key length")
 
 
 def _b64e(data: bytes) -> str:

@@ -1,4 +1,4 @@
-"""Key pairs (D3, D5): RSA and Ed25519 generation, public PEM files and key IDs.
+"""Key pairs (D3, D5): X25519 and Ed25519 generation, public PEM files and key IDs.
 
 Private keys are stored only through vault.keystore (D6).
 """
@@ -6,23 +6,17 @@ import hashlib
 from pathlib import Path
 
 from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import ed25519, rsa
+from cryptography.hazmat.primitives.asymmetric import ed25519, x25519
 
 from vault.exceptions import KeyManagementError
 
-RSA_KEY_SIZE = 3072
-PUBLIC_EXPONENT = 65537
-MIN_RSA_KEY_SIZE = 3072
-
-
-def generate_keypair(key_size: int = RSA_KEY_SIZE) -> rsa.RSAPrivateKey:
-    if key_size < MIN_RSA_KEY_SIZE:
-        raise KeyManagementError(f"RSA keys must be at least {MIN_RSA_KEY_SIZE} bits")
-    return rsa.generate_private_key(public_exponent=PUBLIC_EXPONENT, key_size=key_size)
+def generate_keypair() -> x25519.X25519PrivateKey:
+    """X25519 pair used only to wrap file keys (D3)."""
+    return x25519.X25519PrivateKey.generate()
 
 
 def generate_signing_keypair() -> ed25519.Ed25519PrivateKey:
-    """Ed25519 pair used only to sign. RSA pairs stay for key wrapping only."""
+    """Ed25519 pair used only to sign. X25519 pairs are for key wrapping only."""
     return ed25519.Ed25519PrivateKey.generate()
 
 
@@ -36,11 +30,11 @@ def load_signing_public_key(path: str | Path) -> ed25519.Ed25519PublicKey:
     return key
 
 
-def save_public_key(public_key: rsa.RSAPublicKey | ed25519.Ed25519PublicKey, path: str | Path) -> None:
+def save_public_key(public_key: x25519.X25519PublicKey | ed25519.Ed25519PublicKey, path: str | Path) -> None:
     Path(path).write_bytes(public_key_to_pem(public_key))
 
 
-def load_public_key(path: str | Path) -> rsa.RSAPublicKey:
+def load_public_key(path: str | Path) -> x25519.X25519PublicKey:
     try:
         data = Path(path).read_bytes()
     except OSError as exc:
@@ -48,26 +42,27 @@ def load_public_key(path: str | Path) -> rsa.RSAPublicKey:
     return public_key_from_pem(data)
 
 
-def public_key_to_pem(public_key: rsa.RSAPublicKey | ed25519.Ed25519PublicKey) -> bytes:
+def public_key_to_pem(public_key: x25519.X25519PublicKey | ed25519.Ed25519PublicKey) -> bytes:
     return public_key.public_bytes(
         encoding=serialization.Encoding.PEM,
         format=serialization.PublicFormat.SubjectPublicKeyInfo,
     )
 
 
-def public_key_from_pem(data: bytes) -> rsa.RSAPublicKey:
+def public_key_from_pem(data: bytes) -> x25519.X25519PublicKey:
     try:
         key = serialization.load_pem_public_key(data)
     except ValueError as exc:
         raise KeyManagementError("Invalid public key") from exc
-    _check_rsa(key)
+    if not isinstance(key, x25519.X25519PublicKey):
+        raise KeyManagementError("Only X25519 keys can be used for key wrapping")
     return key
 
 
-def key_id(public_key: rsa.RSAPublicKey | ed25519.Ed25519PublicKey) -> str:
+def key_id(public_key: x25519.X25519PublicKey | ed25519.Ed25519PublicKey) -> str:
     """Key ID = SHA-256 over the DER SubjectPublicKeyInfo, lowercase hex (64 chars).
 
-    The same rule identifies recipients (RSA) and signers (Ed25519).
+    The same rule identifies recipients (X25519) and signers (Ed25519).
     """
     der = public_key.public_bytes(
         encoding=serialization.Encoding.DER,
@@ -75,9 +70,3 @@ def key_id(public_key: rsa.RSAPublicKey | ed25519.Ed25519PublicKey) -> str:
     )
     return hashlib.sha256(der).hexdigest()
 
-
-def _check_rsa(key) -> None:
-    if not isinstance(key, rsa.RSAPublicKey):
-        raise KeyManagementError("Only RSA keys are supported")
-    if key.key_size < MIN_RSA_KEY_SIZE:
-        raise KeyManagementError(f"RSA keys must be at least {MIN_RSA_KEY_SIZE} bits")

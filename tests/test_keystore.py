@@ -92,3 +92,12 @@ def test_stolen_keystore_alone_cannot_decrypt(bob_keystore, bob):
     for guess in (b"", b"password", b"123456789012", b"correct horse battery"):
         with pytest.raises(KeyManagementError):
             keystore.load_keystore(bob_keystore, guess, "wrap")
+
+
+def test_rsa_private_key_rejected_for_wrap(tmp_path):
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    legacy = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    with pytest.raises(KeyManagementError):
+        keystore.save_keystore(legacy, "wrap", tmp_path / "old.key.json", PASSWORD)
+    assert not (tmp_path / "old.key.json").exists()

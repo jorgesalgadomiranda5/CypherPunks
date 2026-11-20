@@ -36,11 +36,16 @@ def _read_key(path: str) -> bytes:
         raise VaultError("Could not read a valid key file") from exc
 
 
-def _write_key(path: str, key: bytes) -> None:
-    # Owner read/write only, where the OS supports it.
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+def _write_key(path: str, key: bytes, force: bool = False) -> None:
+    # Owner read/write only, where the OS supports it. Never truncate silently.
+    flags = os.O_WRONLY | os.O_CREAT | (os.O_TRUNC if force else os.O_EXCL)
+    try:
+        fd = os.open(path, flags, 0o600)
+    except FileExistsError:
+        raise VaultError(f"Key file already exists: {path}") from None
     with os.fdopen(fd, "w", encoding="ascii") as fh:
         fh.write(key.hex())
+    os.chmod(path, 0o600)  # O_TRUNC keeps the old mode
 
 
 def _read_input(path: str) -> bytes:
@@ -63,15 +68,19 @@ def _cmd_keygen(args) -> None:
     os.makedirs(args.dir, exist_ok=True)
     private_path = os.path.join(args.dir, f"{args.name}.key.json")
     public_path = os.path.join(args.dir, f"{args.name}.pub.pem")
-    if os.path.exists(private_path):
-        raise VaultError(f"Key already exists: {private_path}")
+    sign_private_path = os.path.join(args.dir, f"{args.name}.sign.key.json")
+    sign_public_path = os.path.join(args.dir, f"{args.name}.sign.pub.pem")
+    taken = [p for p in (private_path, public_path, sign_private_path, sign_public_path)
+             if os.path.exists(p)]
+    if taken:
+        raise VaultError("Refusing to overwrite: " + ", ".join(taken))
     private_key = keys.generate_keypair()
     passphrase = _ask_passphrase(confirm=True)
     keystore.save_keystore(private_key, "wrap", private_path, passphrase)
     keys.save_public_key(private_key.public_key(), public_path)
     signing_key = keys.generate_signing_keypair()
-    keystore.save_keystore(signing_key, "sign", os.path.join(args.dir, f"{args.name}.sign.key.json"), passphrase)
-    keys.save_public_key(signing_key.public_key(), os.path.join(args.dir, f"{args.name}.sign.pub.pem"))
+    keystore.save_keystore(signing_key, "sign", sign_private_path, passphrase)
+    keys.save_public_key(signing_key.public_key(), sign_public_path)
     print(f"Keystore -> {private_path} (encrypted; never share it)")
     print(f"Public key  -> {public_path}")
     print(f"Key ID      -> {keys.key_id(private_key.public_key())}")
@@ -80,9 +89,12 @@ def _cmd_keygen(args) -> None:
 def _cmd_share(args) -> None:
     plaintext = _read_input(args.input)
     public_keys = [keys.load_public_key(path) for path in args.recipient]
-    out = args.output or args.input + ".sdv"       
+    out = args.output or args.input + ".sdv"
+    if os.path.exists(out) and not args.force:
+        raise VaultError(f"Output file already exists: {out}")
     signing_key = keystore.load_keystore(args.sign_key, _ask_passphrase(), "sign")
-    file_vault._atomic_write(out, hybrid.encrypt_and_sign(plaintext, public_keys, signing_key))
+    file_vault._atomic_write(out, hybrid.encrypt_and_sign(plaintext, public_keys, signing_key),
+                             overwrite=args.force)
     print(f"Encrypted for {len(public_keys)} recipient(s) -> {out}")
 
 
@@ -93,7 +105,8 @@ def _cmd_open(args) -> None:
         raise VaultError(f"Output file already exists: {out}")
     private_key = keystore.load_keystore(args.identity, _ask_passphrase(), "wrap")
     sender_key = keys.load_signing_public_key(args.sender)
-    file_vault._atomic_write(out, hybrid.verify_and_decrypt(data, private_key, sender_key))
+    file_vault._atomic_write(out, hybrid.verify_and_decrypt(data, private_key, sender_key),
+                             overwrite=args.force)
     print(f"Decrypted -> {out}")
 
 
@@ -124,6 +137,8 @@ def build_parser() -> argparse.ArgumentParser:
     enc.add_argument("input")
     enc.add_argument("-o", "--output", help="container path (default: <input>.sdv)")
     enc.add_argument("-k", "--key-out", help="key file path (default: <container>.key)")
+    enc.add_argument("-f", "--force", action="store_true",
+                     help="overwrite the container and key file if they already exist")
 
     dec = sub.add_parser("decrypt", help="decrypt a .sdv container")
     dec.add_argument("input")
@@ -142,6 +157,8 @@ def build_parser() -> argparse.ArgumentParser:
     sh.add_argument("-s", "--sign-key", required=True, metavar="SIGN_KEYSTORE",
                 help="your signing keystore (<name>.sign.key.json)")
     sh.add_argument("-o", "--output", help="container path (default: <input>.sdv)")
+    sh.add_argument("-f", "--force", action="store_true",
+                    help="overwrite the container if it already exists")
 
     op = sub.add_parser("open", help="decrypt a shared container with your private key (D3)")
     op.add_argument("input")
@@ -173,9 +190,13 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         if args.command == "encrypt":
-            out, key = file_vault.encrypt_file(args.input, args.output)
+            out = args.output or args.input + ".sdv"
             key_path = args.key_out or out + ".key"
-            _write_key(key_path, key)
+            taken = [p for p in (out, key_path) if os.path.exists(p)]
+            if taken and not args.force:
+                raise VaultError("Output file already exists: " + ", ".join(taken))
+            out, key = file_vault.encrypt_file(args.input, out, overwrite=args.force)
+            _write_key(key_path, key, force=args.force)
             print(f"Encrypted -> {out}")
             print(f"Key       -> {key_path}  (keep it safe; it is not in the container)")
         elif args.command == "decrypt":

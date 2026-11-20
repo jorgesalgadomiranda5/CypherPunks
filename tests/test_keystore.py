@@ -1,5 +1,6 @@
 """D6 required tests: a private key is usable only with its password."""
 import base64
+import os
 import json
 
 import pytest
@@ -101,3 +102,20 @@ def test_rsa_private_key_rejected_for_wrap(tmp_path):
     with pytest.raises(KeyManagementError):
         keystore.save_keystore(legacy, "wrap", tmp_path / "old.key.json", PASSWORD)
     assert not (tmp_path / "old.key.json").exists()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="file modes are POSIX-only")
+def test_backup_and_restore_are_owner_only(tmp_path, bob_keystore):
+    backup = keystore.backup_keystore(bob_keystore, tmp_path / "backups")
+    restored = tmp_path / "restored" / "bob.key.json"
+    keystore.restore_keystore(backup, restored, PASSWORD, "wrap")
+    for path in (backup, restored):
+        assert (path.stat().st_mode & 0o777) == 0o600
+
+
+def test_restore_refuses_existing_target(tmp_path, bob_keystore):
+    backup = keystore.backup_keystore(bob_keystore, tmp_path / "backups")
+    before = bob_keystore.read_bytes()
+    with pytest.raises(KeyManagementError):
+        keystore.restore_keystore(backup, bob_keystore, PASSWORD, "wrap")
+    assert bob_keystore.read_bytes() == before

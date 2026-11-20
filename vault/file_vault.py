@@ -11,24 +11,39 @@ from vault import container, crypto_core
 from vault.exceptions import VaultError
 
 
-def _atomic_write(path: str, data: bytes) -> None:
-    """Write to a temp file in the same folder, then rename.
+def _atomic_write(path: str, data: bytes, overwrite: bool = False, mode: int = 0o600) -> None:
+    """Write to a temp file in the same folder, then move it into place.
 
     If anything fails midway, the destination is never left half-written.
+    Without overwrite, the final step is a hard link, which fails if the
+    destination already exists, so the check cannot race with another process.
     """
+    if not overwrite and os.path.exists(path):
+        raise VaultError(f"Output file already exists: {path}")
     directory = os.path.dirname(os.path.abspath(path))
     fd, tmp_path = tempfile.mkstemp(dir=directory, prefix=".vault-tmp-")
     try:
+        os.chmod(tmp_path, mode)
         with os.fdopen(fd, "wb") as fh:
             fh.write(data)
-        os.replace(tmp_path, path)
+            fh.flush()
+            os.fsync(fh.fileno())
+        if overwrite:
+            os.replace(tmp_path, path)
+        else:
+            try:
+                os.link(tmp_path, path)
+            except FileExistsError:
+                raise VaultError(f"Output file already exists: {path}") from None
+            os.remove(tmp_path)
     except BaseException:
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
         raise
 
 
-def encrypt_file(input_path: str, output_path: str | None = None) -> tuple[str, bytes]:
+def encrypt_file(input_path: str, output_path: str | None = None,
+                 overwrite: bool = False) -> tuple[str, bytes]:
     """Encrypt a file with a fresh key.
 
     Returns (container_path, key). The key is NOT stored in the container.
@@ -47,7 +62,8 @@ def encrypt_file(input_path: str, output_path: str | None = None) -> tuple[str, 
     aad = container.build_header(metadata_bytes)
 
     nonce, ciphertext_with_tag = crypto_core.encrypt(key, plaintext, aad)
-    _atomic_write(output_path, container.pack(metadata_bytes, nonce, ciphertext_with_tag))
+    _atomic_write(output_path, container.pack(metadata_bytes, nonce, ciphertext_with_tag),
+                  overwrite=overwrite)
     return output_path, key
 
 
@@ -83,7 +99,5 @@ def decrypt_file(container_path: str, key: bytes, output_path: str | None = None
         name = os.path.basename(metadata["original_name"]) or "decrypted.bin"
         output_dir = output_dir or os.path.dirname(os.path.abspath(container_path))
         output_path = os.path.join(output_dir, name)
-    if os.path.exists(output_path) and not overwrite:
-        raise VaultError(f"Output file already exists: {output_path}")
-    _atomic_write(output_path, plaintext)
+    _atomic_write(output_path, plaintext, overwrite=overwrite)
     return output_path

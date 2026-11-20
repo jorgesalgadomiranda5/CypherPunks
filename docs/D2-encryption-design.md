@@ -64,9 +64,15 @@ Parsing rejects, before any cryptography runs: wrong magic, containers too short
 1. Parse the structure (offsets only; nothing is trusted yet).
 2. Verify the tag and decrypt with the stored header as AAD.
 3. Only if step 2 succeeds, parse and validate the metadata.
-4. Write the output through a temporary file and an atomic rename.
+4. Write the output through a temporary file, then move it into place with an exclusive hard link (or an atomic rename when `--force` is given).
 
 Any failure raises an exception and **no output file is created**, not even a partial one. Decryption also refuses to replace an existing file (for example, the original document sitting next to its `.sdv`) unless the caller passes `overwrite=True` (`--force` in the CLI). Authentication errors carry a generic message ("authentication failed") that does not reveal whether the key, nonce, ciphertext or metadata was the problem. The original file name from the metadata is reduced to its base name before use, so a stored name cannot point outside the output folder.
+
+### Overwrite policy
+
+No command replaces an existing file unless `--force` is given. This applies to containers (`encrypt`, `share`), plaintext outputs (`decrypt`, `open`), key files and keystores (`keygen`, `backup`, `restore`). Final writes use exclusive creation (`O_EXCL`, or a hard link from a temporary file), so the check cannot race with another process. Key files and keystores are created with mode 0600, including backups and restored copies.
+
+`encrypt` checks both outputs, the `.sdv` and its `.key`, before encrypting anything, so a failed run never leaves a container without its key. `keygen` checks its four output files before generating any key.
 
 ## 3. Security decisions
 
@@ -111,6 +117,7 @@ Run with `python -m pytest -v`.
 | Multiple encryptions produce different ciphertexts | `test_two_encryptions_differ`, `test_same_input_gives_different_ciphertexts` |
 | Nonce uniqueness / secure randomness | `test_nonces_are_unique`, `test_keys_are_fresh` |
 | Safe failure | `test_failed_decryption_writes_nothing`, `test_cli_tampered_container_returns_error`, `test_decrypt_does_not_overwrite_existing_file` |
+| No silent overwrite | `test_encrypt_twice_keeps_original_container_and_key`, `test_encrypt_refuses_existing_key_file_before_encrypting`, `test_encrypt_force_replaces`, `test_share_refuses_existing_output`, `test_keygen_refuses_any_existing_output`, `test_backup_and_restore_are_owner_only`, `test_restore_refuses_existing_target` |
 | Metadata always bound | `test_encrypt_requires_aad` |
 
 ## References

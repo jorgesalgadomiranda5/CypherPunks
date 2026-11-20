@@ -8,7 +8,6 @@ change to it makes the keystore fail to open.
 import base64
 import json
 import os
-import shutil
 import time
 from pathlib import Path
 
@@ -83,7 +82,15 @@ def save_keystore(private_key: PrivateKey, usage: str, path: str | Path, passwor
 def load_keystore(path: str | Path, password: bytes, usage: str) -> PrivateKey:
     """Derive the key from the password and decrypt the private key, only in memory."""
     try:
-        store = json.loads(Path(path).read_text(encoding="utf-8"))
+        data = Path(path).read_bytes()
+    except OSError as exc:
+        raise KeyManagementError(f"Not a valid keystore: {path}") from exc
+    return _unlock(data, password, usage, path)
+
+
+def _unlock(data: bytes, password: bytes, usage: str, path: str | Path) -> PrivateKey:
+    try:
+        store = json.loads(data.decode("utf-8"))
         der = crypto_core.decrypt(
             derive_key(password, _b64d(store["salt"])),
             _b64d(store["nonce"]),
@@ -92,7 +99,7 @@ def load_keystore(path: str | Path, password: bytes, usage: str) -> PrivateKey:
         )
     except IntegrityError:
         raise KeyManagementError("Could not unlock the keystore (wrong password or modified file)") from None
-    except (OSError, ValueError, KeyError, TypeError) as exc:
+    except (ValueError, KeyError, TypeError) as exc:
         raise KeyManagementError(f"Not a valid keystore: {path}") from exc
     private_key = serialization.load_der_private_key(der, password=None)
     metadata = store["metadata"]
@@ -103,34 +110,45 @@ def load_keystore(path: str | Path, password: bytes, usage: str) -> PrivateKey:
     return private_key
 
 
+def _write_private(target: Path, data: bytes) -> None:
+    """Same protection as a new keystore: exclusive creation, owner-only mode."""
+    try:
+        fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        raise KeyManagementError(f"Keystore already exists: {target}") from None
+    with os.fdopen(fd, "wb") as fh:
+        fh.write(data)
+        fh.flush()
+        os.fsync(fh.fileno())
+
+
 def backup_keystore(path: str | Path, backup_dir: str | Path) -> Path:
     """Copy the keystore as it is: the backup stays encrypted, so no password is needed."""
     source = Path(path)
     target = Path(backup_dir) / source.name
-
-    if target.exists():
-        raise KeyManagementError(f"Backup already exists: {target}")
-
     try:
+        data = source.read_bytes()
         target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(source, target)
     except OSError as exc:
         raise KeyManagementError(f"Could not back up {source}") from exc
-
+    _write_private(target, data)
     return target
 
-def restore_keystore(backup_path: str | Path, path: str | Path, password: bytes, usage: str) -> None:
-    """Restore a backup only if it unlocks with the password: a modified or foreign file is refused."""
-    target = Path(path)
-    if target.exists():
-        raise KeyManagementError(f"Keystore already exists: {target}")
-    load_keystore(backup_path, password, usage)
 
+def restore_keystore(backup_path: str | Path, path: str | Path, password: bytes, usage: str) -> None:
+    """Restore a backup only if it unlocks with the password: a modified or foreign file is refused.
+
+    The bytes that are checked are the bytes that are written, so the backup
+    cannot be swapped between the check and the copy.
+    """
+    target = Path(path)
     try:
+        data = Path(backup_path).read_bytes()
         target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(backup_path, target)
     except OSError as exc:
         raise KeyManagementError(f"Could not restore {backup_path}") from exc
+    _unlock(data, password, usage, backup_path)
+    _write_private(target, data)
 
 
 def _aad(store: dict) -> bytes:

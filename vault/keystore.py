@@ -11,6 +11,7 @@ import os
 import time
 from pathlib import Path
 
+from cryptography.exceptions import UnsupportedAlgorithm
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ed25519, x25519
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
@@ -101,9 +102,14 @@ def _unlock(data: bytes, password: bytes, usage: str, path: str | Path) -> Priva
         raise KeyManagementError("Could not unlock the keystore (wrong password or modified file)") from None
     except (ValueError, KeyError, TypeError) as exc:
         raise KeyManagementError(f"Not a valid keystore: {path}") from exc
-    private_key = serialization.load_der_private_key(der, password=None)
-    metadata = store["metadata"]
-    if metadata["usage"] != usage or not isinstance(private_key, KEY_TYPES[usage]):
+    
+    try:
+        private_key = serialization.load_der_private_key(der, password=None)
+    except (ValueError, TypeError, UnsupportedAlgorithm):
+        raise KeyManagementError(f"Invalid private key encoding in {path}") from None
+
+    metadata = store["metadata"]    
+    if metadata.get("usage") != usage or not isinstance(private_key, KEY_TYPES.get(usage, ())):
         raise KeyManagementError(f"This keystore does not hold a '{usage}' key")
     if metadata["key_id"] != key_id(private_key.public_key()):
         raise KeyManagementError("The key does not match the key ID in the keystore")

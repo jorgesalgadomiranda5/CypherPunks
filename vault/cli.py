@@ -24,7 +24,8 @@ import getpass
 import os
 import sys
 
-from vault import file_vault, hybrid, keys, keystore
+
+from vault import file_vault, hybrid, keys, keystore, revocation
 from vault.exceptions import ContainerFormatError, IntegrityError, VaultError
 
 
@@ -90,9 +91,17 @@ def _cmd_share(args) -> None:
     plaintext = _read_input(args.input)
     public_keys = [keys.load_public_key(path) for path in args.recipient]
     out = args.output or args.input + ".sdv"
+    
     if os.path.exists(out) and not args.force:
         raise VaultError(f"Output file already exists: {out}")
+
+    revoked = revocation.load(revocation.path_for(os.path.dirname(args.sign_key) or "."))
+    for public_key in public_keys:
+        revocation.ensure_not_revoked(keys.key_id(public_key), revoked)
+
     signing_key = keystore.load_keystore(args.sign_key, _ask_passphrase(), "sign")
+    revocation.ensure_not_revoked(keys.key_id(signing_key.public_key()), revoked)
+
     file_vault._atomic_write(out, hybrid.encrypt_and_sign(plaintext, public_keys, signing_key),
                              overwrite=args.force)
     print(f"Encrypted for {len(public_keys)} recipient(s) -> {out}")
@@ -103,8 +112,10 @@ def _cmd_open(args) -> None:
     out = args.output or (args.input[:-4] if args.input.endswith(".sdv") else args.input + ".out")
     if os.path.exists(out) and not args.force:
         raise VaultError(f"Output file already exists: {out}")
-    private_key = keystore.load_keystore(args.identity, _ask_passphrase(), "wrap")
     sender_key = keys.load_signing_public_key(args.sender)
+    revoked = revocation.load(revocation.path_for(os.path.dirname(args.identity) or "."))
+    revocation.ensure_not_revoked(keys.key_id(sender_key), revoked)
+    private_key = keystore.load_keystore(args.identity, _ask_passphrase(), "wrap")
     file_vault._atomic_write(out, hybrid.verify_and_decrypt(data, private_key, sender_key),
                              overwrite=args.force)
     print(f"Decrypted -> {out}")
@@ -121,6 +132,19 @@ def _cmd_restore(args) -> None:
     target = os.path.join(args.dir, name)
     keystore.restore_keystore(args.input, target, _ask_passphrase(), usage)
     print(f"Restored -> {target}")
+
+
+
+def _cmd_revoke(args) -> None:
+    if os.path.isfile(args.key):
+        kid = keys.key_id(keys.load_any_public_key(args.key))
+    else:
+        kid = args.key
+
+    path = revocation.path_for(args.dir)
+    added = revocation.revoke(path, kid)
+    print(f"{'Revoked' if added else 'Already revoked'}: {kid} ({path})")
+
 
 
 def _cmd_recipients(args) -> None:
@@ -183,6 +207,13 @@ def build_parser() -> argparse.ArgumentParser:
     rs.add_argument("input", metavar="BACKUP")
     rs.add_argument("-d", "--dir", default="keystore", help="keystore folder (default: keystore)")
     
+    rv = sub.add_parser("revoke", help="revoke a public key or key ID (D6)")
+    rv.add_argument("key", metavar="PUB_PEM_OR_KEY_ID",
+                    help="public key PEM file or its 64-character hexadecimal key ID")
+    rv.add_argument("-d", "--dir", default="keystore",
+                    help="folder containing revoked.txt (default: keystore)")
+
+
     return parser
 
 
@@ -211,11 +242,14 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "open":
             _cmd_open(args)
         elif args.command == "backup":
-            _cmd_backup(args)
+            _cmd_backup(args)        
         elif args.command == "restore":
             _cmd_restore(args)
+        elif args.command == "revoke":
+            _cmd_revoke(args)
         else:
             _cmd_recipients(args)
+
         return 0
         
     except IntegrityError:

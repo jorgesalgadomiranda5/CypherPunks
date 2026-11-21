@@ -29,6 +29,17 @@ def load_signing_public_key(path: str | Path) -> ed25519.Ed25519PublicKey:
         raise KeyManagementError("Only Ed25519 keys can be used for signatures")
     return key
 
+def load_any_public_key(path: str | Path) -> x25519.X25519PublicKey | ed25519.Ed25519PublicKey:
+    """Wrapping or signing public key, for commands that accept either (revoke)."""
+    try:
+        key = serialization.load_pem_public_key(Path(path).read_bytes())
+    except (OSError, ValueError) as exc:
+        raise KeyManagementError(f"Could not load public key: {path}") from exc
+    if not isinstance(key, (x25519.X25519PublicKey, ed25519.Ed25519PublicKey)):
+        raise KeyManagementError("Only X25519 and Ed25519 public keys are supported")
+    return key
+
+
 
 def save_public_key(public_key: x25519.X25519PublicKey | ed25519.Ed25519PublicKey, path: str | Path) -> None:
     Path(path).write_bytes(public_key_to_pem(public_key))

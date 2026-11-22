@@ -27,6 +27,8 @@ FORMAT_VERSION = "3.0"
 LENGTH_FORMAT = ">I"
 LENGTH_SIZE = struct.calcsize(LENGTH_FORMAT)
 MAX_HEADER_SIZE = 64 * 1024
+# Smallest byte string that could be a container: magic, length, nonce and tag.
+MIN_CONTAINER_SIZE = len(MAGIC) + LENGTH_SIZE + NONCE_SIZE_BYTES + TAG_SIZE_BYTES
 
 MAX_RECIPIENTS = 64  # Added for step 5!
 
@@ -88,8 +90,7 @@ def pack(header_json: bytes, nonce: bytes, ciphertext_with_tag: bytes) -> bytes:
 
 def unpack(data: bytes) -> ContainerV2:
     """Split and validate the structure. Nothing here is trusted until the tag verifies."""
-    min_size = len(MAGIC) + LENGTH_SIZE + NONCE_SIZE_BYTES + TAG_SIZE_BYTES
-    if len(data) < min_size:
+    if len(data) < MIN_CONTAINER_SIZE:
         raise ContainerFormatError("Container too short")
     if data[:len(MAGIC)] != MAGIC:
         raise ContainerFormatError("Not a shared vault container (bad magic)")

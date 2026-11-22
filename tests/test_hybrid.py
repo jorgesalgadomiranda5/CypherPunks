@@ -102,14 +102,14 @@ def _rewrite_header(blob: bytes, mutate) -> bytes:
 
 # Required test 1
 def test_two_recipients_can_both_decrypt(shared, alice, bob):
-    assert hybrid.decrypt_as_recipient(shared, alice) == PLAINTEXT
-    assert hybrid.decrypt_as_recipient(shared, bob) == PLAINTEXT
+    assert hybrid._decrypt_unsigned(shared, alice) == PLAINTEXT
+    assert hybrid._decrypt_unsigned(shared, bob) == PLAINTEXT
 
 
 # Required test 2
 def test_unauthorized_user_cannot_decrypt(shared, eve):
     with pytest.raises(IntegrityError):
-        hybrid.decrypt_as_recipient(shared, eve)
+        hybrid._decrypt_unsigned(shared, eve)
 
 # Required test 3
 def test_tampered_recipient_list_fails(shared, bob, eve):
@@ -123,7 +123,7 @@ def test_tampered_recipient_list_fails(shared, bob, eve):
     tampered = _rewrite_header(shared, add_eve)
     for key in (bob, eve):
         with pytest.raises(IntegrityError):
-            hybrid.decrypt_as_recipient(tampered, key)
+            hybrid._decrypt_unsigned(tampered, key)
 
 
 def test_swapped_identities_fail(shared, alice, bob):
@@ -135,7 +135,7 @@ def test_swapped_identities_fail(shared, alice, bob):
     tampered = _rewrite_header(shared, swap)
     for key in (alice, bob):
         with pytest.raises(IntegrityError):
-            hybrid.decrypt_as_recipient(tampered, key)
+            hybrid._decrypt_unsigned(tampered, key)
 
 # Required test 4
 def test_wrong_private_key_fails(alice, bob, eve):
@@ -150,7 +150,7 @@ def test_wrong_public_key_at_encryption_locks_out_intended_recipient(alice, eve)
     """If the sender uses the wrong public key, the intended recipient cannot open the file."""
     blob = hybrid.encrypt_for_recipients(PLAINTEXT, [eve.public_key()])
     with pytest.raises(IntegrityError):
-        hybrid.decrypt_as_recipient(blob, alice)
+        hybrid._decrypt_unsigned(blob, alice)
 
 # Required test 5
 def test_removing_recipient_entry_breaks_access(shared, alice, bob):
@@ -161,9 +161,9 @@ def test_removing_recipient_entry_breaks_access(shared, alice, bob):
 
     tampered = _rewrite_header(shared, drop_bob)
     with pytest.raises(IntegrityError):
-        hybrid.decrypt_as_recipient(tampered, bob)
+        hybrid._decrypt_unsigned(tampered, bob)
     with pytest.raises(IntegrityError):  # AAD changed, so Alice fails too
-        hybrid.decrypt_as_recipient(tampered, alice)
+        hybrid._decrypt_unsigned(tampered, alice)
 # --- Extra attack tests -----------------------------------------------------
 def test_each_recipient_gets_different_wrapped_key(shared):
     wraps = [r.encrypted_key for r in container_v2.unpack(shared).header.recipients]
@@ -180,19 +180,19 @@ def test_algorithm_downgrade_fails(shared, alice):
 
     tampered = _rewrite_header(shared, downgrade)
     with pytest.raises(IntegrityError):
-        hybrid.decrypt_as_recipient(tampered, alice)
+        hybrid._decrypt_unsigned(tampered, alice)
 
 
 def test_ciphertext_bitflip_fails(shared, alice):
     tampered = bytearray(shared)
     tampered[-20] ^= 0x01
     with pytest.raises(IntegrityError):
-        hybrid.decrypt_as_recipient(bytes(tampered), alice)
+        hybrid._decrypt_unsigned(bytes(tampered), alice)
 
 
 def test_truncated_container_fails(shared, alice):
     with pytest.raises(IntegrityError):
-        hybrid.decrypt_as_recipient(shared[:50], alice)
+        hybrid._decrypt_unsigned(shared[:50], alice)
 
 
 def test_duplicate_recipient_rejected(alice):

@@ -34,7 +34,7 @@ def shared(bob):
 def test_correct_password_grants_access(bob_keystore, bob, shared):
     unlocked = keystore.load_keystore(bob_keystore, PASSWORD, "wrap")
     assert keys.key_id(unlocked.public_key()) == keys.key_id(bob.public_key())
-    assert hybrid.decrypt_as_recipient(shared, unlocked) == PLAINTEXT
+    assert hybrid._decrypt_unsigned(shared, unlocked) == PLAINTEXT
 
 
 # Required test 2
@@ -76,7 +76,7 @@ def test_backup_then_restore_works(tmp_path, bob_keystore, shared):
     bob_keystore.unlink()  # the original is lost
     keystore.restore_keystore(backup, bob_keystore, PASSWORD, "wrap")
     restored = keystore.load_keystore(bob_keystore, PASSWORD, "wrap")
-    assert hybrid.decrypt_as_recipient(shared, restored) == PLAINTEXT
+    assert hybrid._decrypt_unsigned(shared, restored) == PLAINTEXT
 
 
 # Required test 5

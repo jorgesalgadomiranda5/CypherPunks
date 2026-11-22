@@ -38,13 +38,17 @@ def encrypt_for_recipients(
     nonce, ciphertext_with_tag = crypto_core.encrypt(file_key, plaintext, aad)
     return container_v2.pack(header_json, nonce, ciphertext_with_tag)
 
-def decrypt_as_recipient(data: bytes, private_key: x25519.X25519PrivateKey) -> bytes:
+def _decrypt_unsigned(data: bytes, private_key: x25519.X25519PrivateKey) -> bytes:
     """Find our entry by key ID, unwrap the file key and decrypt.
+
+    Private: it does NOT authenticate the sender. The only public way to
+    receive a document is verify_and_decrypt (CLI: open).
 
     Every failure (malformed container, not a recipient, wrong key, tampering)
     raises the same generic IntegrityError, so the caller learns nothing about
     which check failed.
     """
+
     try:
         parts = container_v2.unpack(data)
     except ContainerFormatError:
@@ -77,6 +81,9 @@ def verify_and_decrypt(
     sender_key: ed25519.Ed25519PublicKey,
 ) -> bytes:
     """Verify first; only a package with a valid signature reaches decryption."""
+    if len(data) < container_v2.MIN_CONTAINER_SIZE + signatures.SIGNATURE_SIZE_BYTES:
+        raise IntegrityError("Authentication failed")
+
     package = data[:-signatures.SIGNATURE_SIZE_BYTES]
     signatures.verify(
         sender_key,
@@ -85,7 +92,7 @@ def verify_and_decrypt(
     )
     if container_v2.unpack(package).header.metadata.get("signer_id") != key_id(sender_key):
         raise IntegrityError("Authentication failed")
-    return decrypt_as_recipient(package, private_key)
+    return _decrypt_unsigned(package, private_key)
 
 
 def list_recipients(data: bytes) -> list[str]:

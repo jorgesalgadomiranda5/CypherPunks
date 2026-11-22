@@ -10,13 +10,13 @@ Up to D3 the vault gave confidentiality and access control, but nothing told a r
 | `vault/cli.py` | `keygen` creates both pairs, `share` signs, `open` verifies |
 
 ## 2. Workflow
-Sending follows Encrypt, Add metadata, Sign, Store. The file key is wrapped for each recipient, the header with the metadata is assembled, AES-256-GCM encrypts the file with that header as AAD, and the signature is computed last, over the finished SDV2 container. The header has to exist before the AEAD step because it is the associated data.
+Sending follows Encrypt, Add metadata, Sign, Store. The file key is wrapped for each recipient, the header with the metadata is assembled, AES-256-GCM encrypts the file with that header as AAD, and the signature is computed last, over the finished SDV3 container. The header has to exist before the AEAD step because it is the associated data.
 Receiving follows the required order: read the container, separate the signature, verify it, then decrypt if it is valid and reject if it is not. Any failure ends without an output file.
 
 ## 3. Signature design
 
 ### Algorithm chosen
-We use Ed25519 (RFC 8032 [1], FIPS 186-5 [2]) through the `cryptography` library [4], the option the course prefers. Its signing nonce is derived deterministically from the private key and the message, so a weak random number generator at signing time cannot leak the key. Signatures are 64 bytes. The signing pair is separate from the RSA-3072 wrapping pair: one key, one purpose. RSA-PSS is not used anywhere in the project.
+We use Ed25519 (RFC 8032 [1], FIPS 186-5 [2]) through the `cryptography` library [4], the option the course prefers. Its signing nonce is derived deterministically from the private key and the message, so a weak random number generator at signing time cannot leak the key. Signatures are 64 bytes. The signing pair is separate from the X25519 wrapping pair: one key, one purpose. RSA is not used anywhere in the project.
 
 ### Why hashing is required before signing
 A signature scheme works on a short, fixed-size value, while our files have no size limit. `compute_digest` reduces the whole container to one SHA-256 digest, and that digest is what gets signed. This is safe because SHA-256 is collision resistant: an attacker cannot find different data with the same digest. Any changed byte gives a different digest and verification fails.
@@ -24,7 +24,7 @@ A signature scheme works on a short, fixed-size value, while our files have no s
 
 ### What data is signed
 
-The signature covers the complete SDV2 container: magic, header length, header (metadata, algorithms, recipients and signer ID), nonce, ciphertext and tag. This includes everything used as AAD. The only bytes left out are the signature itself.
+The signature covers the complete SDV3 container: magic, header length, header (metadata, algorithms, recipients and signer ID), nonce, ciphertext and tag. This includes everything used as AAD. The only bytes left out are the signature itself.
 
 ### Signature storage
 
@@ -32,10 +32,10 @@ The signature covers the complete SDV2 container: magic, header length, header (
 +-------------+------------------+---------------+------------+--------------------------+----------------+
 | magic (4 B) | header_len (4 B) | header (JSON) | nonce (12) | ciphertext || tag (16 B) | signature (64) |
 +-------------+------------------+---------------+------------+--------------------------+----------------+
-|<--------------------------------- SDV2 container, covered by the signature ---------->|
+|<--------------------------------- SDV3 container, covered by the signature ---------->|
 ```
 
-The SDV2 format does not change. `metadata`, `recipients` and `signer_id` are in the header, `ciphertext` and `tag` keep the D2 layout, and `signature` is added at the end.
+The SDV3 format does not change. `metadata`, `recipients` and `signer_id` are in the header, `ciphertext` and `tag` keep the D2 layout, and `signature` is added at the end.
 
 ### How the signer is identified
 

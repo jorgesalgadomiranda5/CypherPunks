@@ -104,6 +104,10 @@ The same attacker defined in D1 for the untrusted zone: someone who can **read, 
 
 Out of scope at this stage: a compromised endpoint (malware on the owner's machine), theft of the `.key` file, deletion of the container (availability), replay of an old but valid container, and hiding the original file name. The name travels in clear but authenticated, which the assignment allows ("filename (optional)"), but it conflicts with requirement SR-07 from D1. The team decided in PR #2 to keep it for D2 and track moving it into the encrypted payload as a GitHub issue. Key protection and sender authenticity are addressed in the next deliverables.
 
+### Cryptographic agility
+
+Replacing AES-256-GCM with ChaCha20-Poly1305 is a one-line change in the cipher call, but not in the system. The algorithm is declared in the authenticated header, so a new cipher means a new container version, a reader that still accepts the old version so existing files stay readable, a decision on when old versions stop being accepted, and tests for both. The SDV2 to SDV3 change after review is an example of that process: the key-wrapping algorithm changed, the container version went from 2.0 to 3.0, and the tests were updated with it.
+
 ## 4. Tests
 
 Run with `python -m pytest -v`.

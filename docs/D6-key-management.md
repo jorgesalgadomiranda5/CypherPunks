@@ -8,7 +8,8 @@ Up to D5 the vault encrypted, shared and signed files, but every guarantee reste
 | --- | --- |
 | `vault/keystore.py` | New: password-derived key (scrypt), encrypted keystore, backup and restore |
 | `vault/keys.py` | Generates key pairs and handles public keys and key IDs; it no longer writes private keys |
-| `vault/cli.py` | `keygen` writes keystores, `share` and `open` unlock them, new `backup` and `restore` commands |
+| `vault/cli.py` | `keygen` writes keystores, `share` and `open` unlock them, new `backup` and `restore` commands, and `revoke` (added after review) |
+| `vault/revocation.py` | Local revocation list (`keystore/revoked.txt`), added after review |
 | `tests/test_keystore.py` | The five required tests |
 
 Unlocking follows the steps D6 requires. The CLI prompts for the password, scrypt derives a 256-bit key from it and the stored salt, AES-256-GCM decrypts the private key, and the key is used for that one command. The password is never written anywhere, and the decrypted key lives only in the memory of that process, which ends when the command finishes.
@@ -27,8 +28,8 @@ Each private key is stored in its own JSON file. `python -m vault keygen alice` 
 
 ```text
 keystore/
-├── alice.key.json      RSA-3072 private key (usage "wrap"), encrypted
-├── alice.pub.pem       RSA public key, given to senders
+├── alice.key.json      X25519 private key (usage "wrap"), encrypted
+├── alice.pub.pem       X25519 public key, given to senders
 ├── alice.sign.key.json Ed25519 private key (usage "sign"), encrypted
 └── alice.sign.pub.pem  Ed25519 public key, given to recipients
 ```
@@ -70,7 +71,7 @@ Restoring is stricter than backing up. `restore` asks for the password and unloc
 before copying it, so a modified backup or one that belongs to another user is refused instead
 of replacing a working keystore, and an existing keystore is never overwritten. Backups should
 be kept away from the device that holds the keystore, because a single loss would otherwise
-take both. Public keys are not secret and need no special handling.
+take both. Public keys are not secret and need no special handling. Backups and restored keystores are written with exclusive creation and owner-only permissions, and `restore` validates and writes the same bytes, so the file cannot be swapped between the check and the copy.
 
 
 ### Security assumptions
@@ -88,21 +89,23 @@ The stages below follow the key lifecycle described in NIST SP 800-57 [3].
 
 | Stage | What it means | How the vault handles it |
 | --- | --- | --- |
-| Generation | Create a user's key pairs | `keygen` creates an RSA-3072 pair (wrap) and an Ed25519 pair (sign) from the OS random generator, asks for the password twice and writes both keystores right away. The private key never reaches the disk in plaintext. |
+| Generation | Create a user's key pairs | `keygen` creates an X25519 pair (wrap) and an Ed25519 pair (sign) from the OS random generator, asks for the password twice and writes both keystores right away. The private key never reaches the disk in plaintext. |
 | Usage | Use a private key | `share` unlocks the signing keystore and `open` unlocks the wrapping keystore. Each command asks for the password, uses the key once and ends; nothing is cached between commands. |
-| Rotation | Replace a key that is still safe | Done by hand with existing commands: `keygen alice-2027` creates new pairs, the new `.pub.pem` files go to contacts, and new packages are shared with the new key ID. The old keystore and its backup are kept only to open packages received before the change. |
-| Compromise response | A private key, or a keystore together with its password, has leaked | Generate new pairs as in rotation, tell contacts to remove the old public keys and stop accepting the old signer ID, and share again any file that still matters. Every package encrypted for the old key must be treated as readable by the attacker. |
+| Rotation | Replace a key that is still safe | `keygen alice-2027` creates new pairs and the new public keys go to contacts with their key IDs. Each file that must stay readable is opened with the old key and shared again for the new one. Only then are the old public keys revoked (`revoke keystore/alice.pub.pem`, `revoke keystore/alice.sign.pub.pem`), so the user can still open files they signed with the old key. |
+| Compromise response | A private key, or a keystore together with its password, has leaked | `revoke` both old public keys at once and ask contacts to revoke them in their own lists; from then on `share` refuses the old keys and `open` refuses packages signed with them. Generate new pairs and send the public keys over a separate channel. Files received from others are opened and shared again for the new key; files signed with the compromised key are not trusted and must be sent again by their legitimate sender. Every package encrypted for the old key must be treated as readable by the attacker. |
+| Revocation | Stop trusting a key | `python -m vault revoke <pub.pem or key ID>` appends the key ID to `keystore/revoked.txt`. `share` refuses revoked recipients and revoked signing keys; `open` refuses a revoked sender before asking for the password. A damaged list makes the command fail instead of being read as empty. |
+| Existing encrypted files | Keep access after a key change | Open with the old key and share again for the new key, then delete the old `.sdv`. Tested end to end in `test_planned_rotation_keeps_files_readable`. |
 | Expiration (optional) | Retire a key after a set time | Not automated. `created_at` in the metadata records when each key was created, so a team rule such as "rotate every year" can be checked by hand. |
 
-Rotation and compromise response are defined but not automated, which D6 allows. Both reuse `keygen`, `share`, `backup` and `restore`, so no extra code is needed.
+Revocation is implemented (`vault/revocation.py`, `tests/test_revocation.py`); rotation and compromise response combine it with the existing `keygen`, `open` and `share` commands.
 
 ## 4. Access control via keys
 
-Only the holder of the right private key can decrypt. `open` unwraps the file key with the RSA key unlocked from the keystore, and sharing still depends on the encrypted file keys from D3: the container stores one wrapped file key per recipient and nothing else that could open it.
+Only the holder of the right private key can decrypt. `open` unwraps the file key with the X25519 key unlocked from the keystore, and sharing still depends on the encrypted file keys from D3: the container stores one wrapped file key per recipient and nothing else that could open it.
 
-Key identity is consistent. A single rule, SHA-256 of the DER public key, gives the key ID everywhere: the recipient entries in `SDV2` (D3), `signer_id` (D5) and `key_id` in the keystore metadata (D6). When a keystore is unlocked, the vault computes the ID of the decrypted key again and rejects the keystore if it does not match the one stored in the metadata.
+Key identity is consistent. A single rule, SHA-256 of the DER public key, gives the key ID everywhere: the recipient entries in `SDV3` (D3), `signer_id` (D5) and `key_id` in the keystore metadata (D6). When a keystore is unlocked, the vault computes the ID of the decrypted key again and rejects the keystore if it does not match the one stored in the metadata.
 
-Key usage is never ambiguous. Each keystore holds one key with one usage: `wrap` for RSA and `sign` for Ed25519. The caller always states which one it needs (`share` asks for `sign`, `open` asks for `wrap`), and `load_keystore` refuses any other usage, so a signing key can never be used to unwrap a file key, or the other way round.
+Key usage is never ambiguous. Each keystore holds one key with one usage: `wrap` for X25519 and `sign` for Ed25519. The caller always states which one it needs (`share` asks for `sign`, `open` asks for `wrap`), and `load_keystore` refuses any other usage, so a signing key can never be used to unwrap a file key, or the other way round.
 
 ## 5. Threat model alignment
 
@@ -126,13 +129,13 @@ If malware runs on the device while the user types the password, or while a comm
 | Changes to any field of the keystore | A weak or reused password, given enough guesses |
 | Using a key for the wrong job, or a keystore whose key does not match its key ID | Reading the memory of a running process |
 | Restoring a modified or foreign backup | A forgotten password: there is no recovery, and the backup needs the same password |
-| The password being stored or logged | Revoking a compromised key automatically: contacts are told by hand |
+| The password being stored or logged | Revocation on other users' machines: each contact must run `revoke` on their own list |
 
 ## 6. Security discussion
 
 ### Why encrypt private keys?
 
-A private key is the user's identity in the vault. Whoever holds the RSA key can open every package sent to the user, and whoever holds the Ed25519 key can sign packages in the user's name. Keys leak through storage more often than through cryptography: a copied disk, a backup or a synchronized folder. Encrypting the key makes a copy of the file useless without the password, which never leaves the user's head.
+A private key is the user's identity in the vault. Whoever holds the X25519 key can open every package sent to the user, and whoever holds the Ed25519 key can sign packages in the user's name. Keys leak through storage more often than through cryptography: a copied disk, a backup or a synchronized folder. Encrypting the key makes a copy of the file useless without the password, which never leaves the user's head.
 
 ### What happens if the password is weak?
 
@@ -143,7 +146,7 @@ An attacker with the keystore can guess offline, at their own pace, and scrypt o
 - The vault cannot detect a compromised device (Section 5.C).
 - Password quality is enforced only by length.
 - A forgotten password cannot be recovered, and backups do not help with that.
-- Rotation and revocation are manual procedures.
+- Revocation is local: each user keeps their own `revoked.txt`, and contacts must be told to revoke a compromised key.
 - Python cannot reliably erase the decrypted key from memory. The vault limits its lifetime to one command but cannot wipe it.
 - The per-file key file of the single-owner D2 mode (`.key`) is a symmetric key, not a private key, and is still stored in hex outside the keystore.
 
@@ -158,6 +161,8 @@ Run with `python -m pytest -v` (`tests/test_keystore.py`).
 | Modified keystore, failure | `test_modified_keystore_fails` (encrypted key, salt, KDF parameters, metadata) |
 | Backup, then restore works | `test_backup_then_restore_works` |
 | Stolen keystore alone cannot decrypt | `test_stolen_keystore_alone_cannot_decrypt` |
+| Backup and restore are owner-only and never overwrite (after review) | `test_backup_and_restore_are_owner_only`, `test_restore_refuses_existing_target` |
+| Revocation, rotation and keystore errors (after review) | `tests/test_revocation.py` (11 tests) |
 
 ## References
 

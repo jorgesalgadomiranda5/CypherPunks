@@ -109,6 +109,7 @@ Every flow that crosses TB1, TB2 or TB4 is a point where something can go wrong.
 | SR-08 | Private keys must never leave the Key Store in usable form. | Confidentiality of private keys | Key Store, TB4 (F2, F8) |
 | SR-09 | The passphrase that unlocks a user’s Key Store must never be stored, logged or sent outside the trusted environment, and a wrong passphrase must not reveal anything about the private key. | Credential confidentiality | Key Store unlock, TB3 |
 | SR-10 | Only authentic public keys may be used to protect a file for a recipient or to verify a sender. An attacker must not be able to add, replace or remove Address Book entries without the change being detected. | Authenticity of public keys | Address Book, TB4 (F3, F7) |
+| SR-11 | No command may replace or truncate an existing package, key file or Key Store unless the user explicitly asks for it. | Availability of protected data | Vault, TB3 |
 
 These requirements answer one question: what must stay true even when someone attacks the system? The threat model below names what is being protected (assets) and who it is protected from (adversaries), and links each asset back to the requirements that cover it.
 
@@ -215,7 +216,7 @@ An attacker captures a legitimate Secure Package sent by Alice and stores it.
 
 At a later time, the attacker sends the same package to Bob multiple times in an attempt to make the system process an old transmission as if it were new.
 
-The receiving system must be able to distinguish a new package from a replayed package by validating the timestamp on the package.
+Every package carries a random `file_id`, a `created_at` timestamp and the `signer_id`, all covered by the signature. On a successful `open`, the receiver records `signer_id:file_id` in `keystore/seen.txt` and rejects any later package with the same pair, even if its timestamp is still valid. The timestamp only bounds how old a package may be; the record catches an exact re-delivery.
 
 *Targets A10 · Stopped by SR-05*
 
@@ -241,6 +242,51 @@ Without the password, the attacker can only guess it offline. Every guess must c
 The system must ensure that a copy of the Key Store alone does not give access to the private keys. D6 implements this with a password-protected keystore ([D6-key-management.md](D6-key-management.md)).
 
 *Targets A3, A5 · Stopped by SR-08, SR-09*
+
+---
+
+#### Scenario S7 — Malformed Package
+
+An attacker sends Bob a truncated package, one with extra bytes, or one whose header was altered and signed again with a valid key.
+
+The Vault must reject it without using any private key.
+
+*Targets A10 · Stopped by SR-06*
+
+---
+
+#### Scenario S8 — Compromised Key
+
+Alice's keystore and password leak. The attacker signs packages as Alice and keeps receiving files encrypted for her old key.
+
+Once the key is revoked, neither can happen: `share` refuses the revoked key and `open` rejects packages signed with it.
+
+*Targets A3, A9 · Stopped by SR-08, SR-10*
+
+### 4.4 Traceability matrix
+
+Each row starts from an asset in 4.1 and a scenario in 4.3, names the requirement from Section 3 that stops it, and points to the deliverable and test that implement it.
+
+| ID | Asset | Threat | Scenario | Requirement | Design constraint | Covered by |
+| --- | --- | --- | --- | --- | --- | --- |
+| TR-01 | A1, A10 | Disclosure | S3 | SR-01 | Encrypt before the package leaves the sender's environment | `crypto_core` AES-256-GCM (D2); `test_unauthorized_user_cannot_decrypt` |
+| TR-02 | A1 | Tampering | S2 | SR-02, SR-03 | AEAD tag over the payload, signature over the whole package | `crypto_core`, `signatures` (D2, D5); `test_modified_ciphertext_rejected` |
+| TR-03 | A4 | Unauthorized key recovery | S3 | SR-01 | Per-recipient key protection with an approved elliptic-curve mechanism | `keywrap`, ECIES over X25519 (D3); `test_wrong_recipient_cannot_unwrap`, `test_tampered_ephemeral_key_fails` |
+| TR-04 | A2, A7 | Tampering | S5 | SR-03, SR-07 | Header (metadata and recipients) bound as AAD and signed | `container_v2`, `hybrid` (D3, D5); `test_tampered_recipient_list_fails`, `test_modified_metadata_rejected` |
+| TR-05 | A6, A8 | Spoofing | S1 | SR-04, SR-06 | Verify the signature first; `signer_id` must match the expected key | `hybrid.verify_and_decrypt` (D5); D5 tests with `no_decryption` |
+| TR-06 | A10 | Replay | S4 | SR-05 | Track signed `signer_id:file_id` pairs already opened | Design only (S4) |
+| TR-07 | A10 | Malformed input | S7 | SR-06 | Size and format checks before any key is used | `container_v2`, `hybrid`; `tests/test_malformed.py` |
+| TR-08 | A3, A5 | Key Store theft | S6 | SR-08, SR-09 | Private keys encrypted under scrypt + AES-256-GCM; owner-only files, backups included | `keystore` (D6); `tests/test_keystore.py` |
+| TR-09 | A9 | Public-key substitution | S1 | SR-10 | Key ID confirmed out of band; no silent replacement | `keys.key_id`; D5 "Receiving documents" |
+| TR-10 | A3, A9 | Compromised key still in use | S8 | SR-08, SR-10 | Revocation list checked by `share` and `open` | `revocation` (D6); `tests/test_revocation.py` |
+| TR-11 | A1, A4 | Accidental destruction | — (CLI arguments, TB3) | SR-11 | Exclusive creation; explicit `--force` | `file_vault._atomic_write`, `cli._write_key` (D2); overwrite tests in `test_cli.py` |
+
+### 4.5 Key handling and identity
+
+**Private-key handling model.** Private keys never leave the owner's endpoint in plaintext. They are generated locally, stored only inside a password-protected keystore (D6) and decrypted in memory for a single operation. Key-wrapping (X25519) and signing (Ed25519) keys are separate. Backups are byte-for-byte copies of the encrypted keystore, created with the same owner-only permissions.
+
+**Public-key identity.** A user's identity is the key ID: SHA-256 over the public key's SubjectPublicKeyInfo. Public keys travel through a separate channel, and the receiver confirms the key ID with the owner over a second medium before trusting it. A trusted key is not replaced without repeating that check. Rotated or compromised keys go on the local revocation list.
+
 
 
 Every requirement above can only hold if certain things are true about the environment. Those conditions are listed next.

@@ -62,6 +62,14 @@ The private key and the decryption code would run on data from an unknown source
 
 The signature would prove who produced the ciphertext but say nothing about its context. An attacker could edit the creation date, the algorithm identifiers or the recipient list, and the signature would still verify. The AEAD tag would catch some of this, but only after a recipient had used their private key. Signing the header rejects these changes first.
 
+### Receiving documents
+
+**Required interface.** The only supported way to receive an authenticated document is the signed-package path: `python -m vault open` on the CLI, `hybrid.verify_and_decrypt()` in code. It verifies the Ed25519 signature over the whole package before any key recovery or decryption. The D2 commands `encrypt` and `decrypt` are single-owner tools: they do not authenticate a sender and must not be used to accept files from someone else. The unsigned decryption helper is private (`_decrypt_unsigned`) and is not exposed by the CLI.
+
+**Sender trust.** A sender's `.sign.pub.pem` reaches the receiver over a separate channel (in person or through the team repository). The receiver compares its key ID with the one the sender reads out over another medium, such as a call or a message. Once confirmed, the key is kept in the receiver's `keystore/` folder and is not replaced without repeating that comparison. If the key is compromised, it goes on the revocation list (D6), and `open` then rejects packages signed with it.
+
+**Malformed input.** Truncated signatures, packages shorter than the minimum size and corrupted headers end in `IntegrityError` or `ContainerFormatError`. `tests/test_malformed.py` checks that none of these cases reaches key recovery, including corrupted containers that were signed again with a valid key.
+
 ## 5. Tests
 
 Run with `python -m pytest -v` (`tests/test_signatures.py`).
@@ -73,6 +81,7 @@ Run with `python -m pytest -v` (`tests/test_signatures.py`).
 | C. Modified metadata, rejected | `test_modified_metadata_rejected` |
 | D. Wrong public key, rejected | `test_wrong_public_key_rejected` |
 | E. Signature removed, rejected | `test_signature_removed_rejected` |
+| Malformed packages never reach key recovery (after review) | `tests/test_malformed.py`: `test_broken_signed_package` (6 cases), `test_corrupt_container_signed_again` (5 cases) |
 
 ## References
 

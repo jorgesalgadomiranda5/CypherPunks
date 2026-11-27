@@ -8,6 +8,9 @@
     python -m vault recipients <file.sdv>
     python -m vault backup keystore/me.key.json keystore/me.sign.key.json [-d backups]
     python -m vault restore backups/me.key.json [-d keystore]
+    python -m vault revoke <pub.pem | key ID> [-d keystore]
+
+encrypt, decrypt, share and open never overwrite an existing file unless -f/--force is given.
 
 D2 note: the per-file key is saved as hex in a separate .key file so the
 owner can decrypt later. Protecting that key (Key Store, password, public
@@ -82,9 +85,12 @@ def _cmd_keygen(args) -> None:
     signing_key = keys.generate_signing_keypair()
     keystore.save_keystore(signing_key, "sign", sign_private_path, passphrase)
     keys.save_public_key(signing_key.public_key(), sign_public_path)
-    print(f"Keystore -> {private_path} (encrypted; never share it)")
-    print(f"Public key  -> {public_path}")
-    print(f"Key ID      -> {keys.key_id(private_key.public_key())}")
+    print(f"Keystore         -> {private_path} (encrypted; never share it)")
+    print(f"Public key       -> {public_path}")
+    print(f"Key ID           -> {keys.key_id(private_key.public_key())}")
+    print(f"Signing keystore -> {sign_private_path} (encrypted; never share it)")
+    print(f"Signing key      -> {sign_public_path}")
+    print(f"Signing key ID   -> {keys.key_id(signing_key.public_key())}")
 
 
 def _cmd_share(args) -> None:
@@ -179,7 +185,7 @@ def build_parser() -> argparse.ArgumentParser:
                     metavar="PUB_PEM",
                     help="recipient public key; repeat once per recipient")
     sh.add_argument("-s", "--sign-key", required=True, metavar="SIGN_KEYSTORE",
-                help="your signing keystore (<name>.sign.key.json)")
+                    help="your signing keystore (<name>.sign.key.json)")
     sh.add_argument("-o", "--output", help="container path (default: <input>.sdv)")
     sh.add_argument("-f", "--force", action="store_true",
                     help="overwrite the container if it already exists")

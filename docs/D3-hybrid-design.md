@@ -53,12 +53,12 @@ It keeps the SDV1 shape (header as AAD, nonce outside it, tag at the end), so th
 
 ```json
 {"algorithms":{"aead":"AES-256-GCM","key_id":"SHA256-SPKI","key_wrap":"ECIES-X25519-HKDF-SHA256-AES256GCM"},
- "metadata":{"created_at":1792900000,"file_id":"<uuid4>"},
+ "metadata":{"created_at":1792900000,"file_id":"<uuid4>","signer_id":"<64 hex>"},
  "recipients":[{"encrypted_key":"<base64, 92 bytes>","kid":"<64 hex>"}, ...],
  "version":"3.0"}
 ```
 
-Recipients are sorted by key ID so the same set always produces the same bytes. The parser rejects unknown fields, unsupported versions or algorithms, zero or more than 64 recipients, duplicate or malformed key IDs, wrapped keys that are not exactly 92 bytes, and any header that is not in canonical form. RSA-based SDV2 containers are rejected as an unknown format. The original file name is **not** stored (unlike SDV1); `open` restores it from the container name (`report.pdf.sdv` → `report.pdf`). This closes the SR-07 gap noted in D2 for shared files.
+`signer_id` was added to the metadata in D5. Recipients are sorted by key ID so the same set always produces the same bytes. The parser rejects unknown fields, unsupported versions or algorithms, zero or more than 64 recipients, duplicate or malformed key IDs, wrapped keys that are not exactly 92 bytes, and any header that is not in canonical form. RSA-based SDV2 containers are rejected as an unknown format. The original file name is **not** stored (unlike SDV1); `open` restores it from the container name (`report.pdf.sdv` → `report.pdf`). This closes the SR-07 gap noted in D2 for shared files.
 
 ## 4. Security decisions
 

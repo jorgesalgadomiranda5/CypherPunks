@@ -38,7 +38,7 @@ The platform (the Vault, from here on) exists to make that not matter: Bob shoul
 - *Content safety.* The platform can tell Bob that a file really came from Alice and wasn't altered. It cannot tell if the file is harmless.
 - *What happens after decryption.* Once Bob has the plaintext, he could copy it, forward it, or leak it, and the architecture has no say in that.
 - *Traffic analysis.* Who talks to whom, how often, and roughly how much isn't hidden beyond the minimum that the visible metadata already allows.
-- *Key lifecycle.* Revocation, rotation, recovery, and how public keys get enrolled in the first place along with what happens to old packages if a long-term key is later exposed are left as open questions.
+- *Key lifecycle.* Revocation, rotation, recovery, and how public keys get enrolled in the first place along with what happens to old packages if a long-term key is later exposed are left as open questions. D6 later added a local revocation list and a rotation procedure (Scenario S8); certificate-based enrollment of public keys is still open.
 
 The next section shows where each of these five features lives in the architecture and which parts of the system are trusted to carry them out.
 
@@ -89,6 +89,8 @@ The "What the design assumes" column is stated formally as the trust assumptions
 | F8 | Key Store → Vault (recipient) | Decryption private key, used inside the Vault | TB4 |
 | F9 | Vault (recipient) → Bob | The original file | TB3 |
 | F10 | Attacker ↔ untrusted zone | Read, copy, modify, delete, replay | None |
+
+The architecture diagram after D6 ([architecture_diagram_d6.png](architecture_diagram_d6.png)) keeps this numbering with the prefix DF (DF1–DF10) and adds DF11, a copy obtained by a registered user who is not a recipient, and DF12, the encrypted keystore backups.
 
 ### Where encryption, signing and keys sit
 
@@ -216,7 +218,7 @@ An attacker captures a legitimate Secure Package sent by Alice and stores it.
 
 At a later time, the attacker sends the same package to Bob multiple times in an attempt to make the system process an old transmission as if it were new.
 
-Every package carries a random `file_id`, a `created_at` timestamp and the `signer_id`, all covered by the signature. On a successful `open`, the receiver records `signer_id:file_id` in `keystore/seen.txt` and rejects any later package with the same pair, even if its timestamp is still valid. The timestamp only bounds how old a package may be; the record catches an exact re-delivery.
+Every package carries a random `file_id`, a `created_at` timestamp and the `signer_id`, all covered by the signature. The planned freshness check will record `signer_id:file_id` in `keystore/seen.txt` on a successful `open` and reject any later package with the same pair, even if its timestamp is still valid. The timestamp only bounds how old a package may be; the record catches an exact re-delivery. This check is not implemented yet (TR-06 and the known limitations in the README), so a captured package can still be replayed.
 
 *Targets A10 · Stopped by SR-05*
 

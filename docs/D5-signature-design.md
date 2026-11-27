@@ -1,5 +1,5 @@
 # D5: Signatures & Authentication
-Up to D3 the vault gave confidentiality and access control, but nothing told a recipient who created a file: anyone holding a public key could build a valid package. D5 closes that gap (SR-04). Every shared package is now signed by its sender, and a recipient verifies that signature before any secret key is touched.
+Up to D3 the vault gave confidentiality and access control, but nothing told a recipient who created a file: anyone holding a public key could build a valid package. D5 closes that gap (SR-04). Every shared package is now signed by its sender, and a recipient verifies that signature before any secret key is used.
 
 ## 1. Module layout
 | File | Change |

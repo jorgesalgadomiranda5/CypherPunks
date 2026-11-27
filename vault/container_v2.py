@@ -30,11 +30,11 @@ MAX_HEADER_SIZE = 64 * 1024
 # Smallest byte string that could be a container: magic, length, nonce and tag.
 MIN_CONTAINER_SIZE = len(MAGIC) + LENGTH_SIZE + NONCE_SIZE_BYTES + TAG_SIZE_BYTES
 
-MAX_RECIPIENTS = 64  # Added for step 5!
+MAX_RECIPIENTS = 64
 
 ALGORITHMS = {"aead": "AES-256-GCM", "key_wrap": WRAP_ALGORITHM, "key_id": "SHA256-SPKI"}
 
-_KID_PATTERN = re.compile(r"^[0-9a-f]{64}$")  # Added for step 5!
+_KID_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 @dataclass(frozen=True)
 class RecipientEntry:
@@ -147,7 +147,7 @@ def _validate_header(header: Header) -> None:
     if not isinstance(header.metadata, dict):
         raise ContainerFormatError("Metadata must be a JSON object")
 
-        # Check the number of recipients.
+    # Check the number of recipients.
     if not 1 <= len(header.recipients) <= MAX_RECIPIENTS:
         raise ContainerFormatError("Recipient count out of range")
 

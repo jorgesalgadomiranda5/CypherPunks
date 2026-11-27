@@ -13,6 +13,7 @@ Two people who do not share a trusted network need to exchange a file that trave
 | D1 | Architecture and threat model | [docs/D1-architecture-threat-model.md](docs/D1-architecture-threat-model.md) |
 | D2 | Single-owner AEAD encryption (AES-256-GCM, container `SDV1`) | Implemented and tested |
 | D3 | Hybrid multi-recipient sharing (ECIES over X25519 key wrapping, container `SDV3`) | Implemented and tested |
+| D4 | Midterm system presentation and security review | [docs/D4-midterm-system-presentation-&-security-review.pdf](docs/D4-midterm-system-presentation-%26-security-review.pdf) |
 | D5 | Digital signatures and sender authentication (Ed25519) | Implemented and tested |
 | D6 | Key management: password-protected keystore (scrypt + AES-256-GCM), backup and restore | Implemented and tested |
 
@@ -40,7 +41,7 @@ Earlier versions are kept in [docs/architecture_diagram.png](docs/architecture_d
 | `vault/hybrid.py` | Encrypt once for many recipients and sign, verify and decrypt as one of them |
 | `vault/cli.py` | Command-line interface |
 | `vault/exceptions.py` | `VaultError`, `IntegrityError`, `ContainerFormatError`, `KeyManagementError` |
-| `tests/` | 83 unit tests |
+| `tests/` | 117 unit tests |
 | `docs/` | Design documents and architecture diagrams |
 
 ## Requirements

@@ -23,5 +23,5 @@ def verify(public_key: ed25519.Ed25519PublicKey, signature: bytes, data: bytes) 
     try:
         public_key.verify(signature, compute_digest(data))
     except InvalidSignature:
-       # Same message as every other failure: do not reveal which check failed.
+        # Same message as every other failure: do not reveal which check failed.
         raise IntegrityError("Authentication failed") from None

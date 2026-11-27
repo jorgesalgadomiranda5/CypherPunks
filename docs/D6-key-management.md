@@ -111,7 +111,7 @@ Key usage is never ambiguous. Each keystore holds one key with one usage: `wrap`
 
 ### A. What if an attacker steals the keystore?
 
-They get the encrypted key, the salt and the parameters, but not the password. To recover the key they have to guess the password offline, and each guess costs a full scrypt run with 128 MiB of memory. Editing the file does not help, because every field is authenticated. Required test 5 checks this: the stolen file does not contain the plaintext key, and wrong passwords do not open it. This is scenario S3 of D1, covered by SR-08.
+They get the encrypted key, the salt and the parameters, but not the password. To recover the key they have to guess the password offline, and each guess costs a full scrypt run with 128 MiB of memory. Editing the file does not help, because every field is authenticated. Required test 5 checks this: the stolen file does not contain the plaintext key, and wrong passwords do not open it. This is scenario S6 of D1, covered by SR-08 and SR-09.
 
 ### B. What if a password is weak?
 
